@@ -1,0 +1,17 @@
+{
+  "classname": "ExportBuildingSync",
+  "name": "export_building_sync",
+  "display_name": "Export Building Sync",
+  "measure_type": "ReportingMeasure",
+  "arguments": [
+
+  ],
+  "name_xml": "export_building_sync",
+  "uid": "4f939be0-fe1c-11e3-a4ac-0800200c9a66",
+  "version_id": "6daf9d86-046b-4450-a770-e338090f1624",
+  "tags": [
+    "Reporting.QAQC"
+  ],
+  "modeler_description_xml": "Add this reporting measure to export BuildingSync XML from an analysis",
+  "description_xml": "Export BuildingSync XML"
+}
