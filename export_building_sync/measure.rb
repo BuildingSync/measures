@@ -17,11 +17,9 @@ class ExportBuildingSync < OpenStudio::Ruleset::ReportingUserScript
     super(runner, user_arguments)
 
     # use the built-in error checking
-    unless runner.validateUserArguments(arguments, user_arguments)
-      return false
-    end
+    return false unless runner.validateUserArguments(arguments, user_arguments)
 
-    runner.registerInfo "Running BuildingSync XML exporter"
+    runner.registerInfo 'Running BuildingSync XML exporter'
 
     true
   end
