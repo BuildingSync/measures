@@ -132,7 +132,6 @@ Style/GuardClause:
 # Configuration parameters: SupportedStyles, UseHashRocketsWithSymbolValues, PreferHashRocketsForNonAlnumEndingSymbols.
 # SupportedStyles: ruby19, ruby19_no_mixed_keys, hash_rockets
 Style/HashSyntax:
-  Configuration: UseHashRocketsWithSymbolValues
   EnforcedStyle: hash_rockets
 
 # Offense count: 3
