@@ -839,11 +839,11 @@ class RoofInsulatedArea < SimpleElement; end
 class ScheduleDetails < SimpleElement
   def specify_children
     @children = {}
-    @children[:DayType] = { :required=>false,:value=nil }
-    @children[:ScheduleCategory] = { :required=>false,:value=nil }
-    @children[:DayStartTime] = { :required=>false,:value=nil }
-    @children[:DayEndTime] = { :required=>false,:value=nil }
-    @children[:PartialOperationPercentage] = { :required=>false,:value=nil }
+    @children[:DayType] = { :required=>false, :value=>nil }
+    @children[:ScheduleCategory] = { :required=>false,:value=>nil }
+    @children[:DayStartTime] = { :required=>false,:value=>nil }
+    @children[:DayEndTime] = { :required=>false,:value=>nil }
+    @children[:PartialOperationPercentage] = { :required=>false,:value=>nil }
 
   end
 end
@@ -866,7 +866,7 @@ end
 class SkylightID < SimpleElement; 
   def specify_children
     @children={}
-    @children = [:PercentSkylightArea] = { :required=>false,:value=>nil }
+    @children[:PercentSkylightArea] = { :required=>false,:value=>nil }
   end
 
   def specify_attributes
@@ -977,7 +977,7 @@ class Subsections
   def specify_children
     @children = {}
     @children[:Subsection] = { :required=>false, :value=>[] }
-    @children[:UserDefinedFields] { :required=>false, :value=>nil }
+    @children[:UserDefinedFields] = { :required=>false, :value=>nil }
   end
 
   def specify_attributes
