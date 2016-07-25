@@ -41,7 +41,7 @@ class WriteXML
           if(!h[textkey].nil?)
             puts 'Has text that is not nil.', h[textkey]
             puts mostRecentElement
-            # self.mostRecentElement.add Text.new(h[textkey])
+            self.mostRecentElement.add Text.new(h[textkey])
             puts 'Success'
           end
         end
