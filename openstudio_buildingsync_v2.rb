@@ -42,7 +42,7 @@ class SimpleElement
     else
       self.text
       update_attributes
-      ##puts "initilizing...", args
+      #puts "initilizing...", args
       post_initialize(args)
     end
   end
@@ -57,14 +57,14 @@ class SimpleElement
           bulk_children(args[:children])
         end
         if(args.has_key? :attributes)
-          ##puts "Has attributes"
+          #puts "Has attributes"
           args[:attributes].keys.each do |a|
-            ##puts "Writing attribute:", a
+            #puts "Writing attribute:", a
             @attributes[a] = args[:attributes][a] #TODO, this should have better error checking in it, like is a field required but is passed nil?
           end
         end
         if(args.has_key? :text)
-          ##puts "Added text", args[:text]
+          #puts "Added text", args[:text]
           @text = args[:text]
         else
           #TODO #put error that the proper hash keys were not identified.
@@ -84,10 +84,10 @@ class SimpleElement
       #puts @children
       #puts args
       if(args[k][:value].is_a?(Array))
-        ##puts "Value is an array"
+        #puts "Value is an array"
         args[k][:value].each do |c|
-          ##puts "Starting to #put array for key #{k}:", args[k]
-          ##puts "Children: #{@children[k]}"
+          #puts "Starting to #put array for key #{k}:", args[k]
+          #puts "Children: #{@children[k]}"
           @children[k][:value] << c
         end
       else
@@ -114,18 +114,18 @@ class SimpleElement
               #TODO: #put something to alert user that they supplied the wrong class for children
             end
           else #it is an object
-            ##puts "Looking for an object."
+            #puts "Looking for an object."
             if(@children[k].has_key? :type)
-              ##puts 'a type for this object'
-              ##puts "Key #{k} Assiging value: ", args[k][:value]
+              #puts 'a type for this object'
+              #puts "Key #{k} Assiging value: ", args[k][:value]
               @children[k][:value] = args[k][:value]
                 # if(k === @children[k][:type]) #deprecated
                 #   #puts "Key #{k} Assiging value: ", args[k][:value]
                 #   @children[k][:value] = args[k][:value]
                 # end
             else
-              ##puts 'There is no additional type for this object.' + k.to_s
-              ##puts "Key #{k} Assiging value: ", args[k][:value]
+              #puts 'There is no additional type for this object.' + k.to_s
+              #puts "Key #{k} Assiging value: ", args[k][:value]
               @children[k][:value] = args[k][:value]
             end
           end
@@ -532,7 +532,7 @@ class LightingSystemType < SimpleElement
     @children = {}
     @children[:InstalledPower] = { required: false, value: nil }
     @children[:LinkedPremises] = { required: false, value: nil }
-    @children[:OutsideLighting] = { required: false, value: nil}
+    @children[:Location] = { required: false, value: nil}
     #TODO: add more fields as required
   end
   def specify_attributes
@@ -567,6 +567,19 @@ class LinkedPremises < SimpleElement
   end
 end
 
+class Location < EnumeratedElement
+  def specify_enums
+    @enums = ["Interior",
+              "Exterior",
+              "Closet",
+              "Garage",
+              "Attic",
+              "Other",
+              "Unknown"
+    ]
+  end
+end
+
 class Longitude < SimpleElement; end
 class Latitude < SimpleElement; end
 
@@ -596,13 +609,6 @@ class Latitude < SimpleElement; end
 # end
 
 class SlabArea < SimpleElement; end
-
-class Space < SimpleElement 
-  def specify_children
-    @children = {}
-    @children[:LinkedSpaceID] = { required: false, value: [] }
-  end
-end
 
 class OccupancyLevels < SimpleElement
     
@@ -1080,6 +1086,14 @@ class SiteType < SimpleElement
   end
 end
 
+#a special category for LinkedPremises
+class Space < SimpleElement
+  def specify_children
+    @children = {}
+    @children[:LinkedSpaceID] = { required: false, value: [] }
+  end
+end
+
 class SpaceID < IDOnlyElement; end
 
 class Spaces < SimpleElement
@@ -1366,7 +1380,7 @@ class ZOffset < SimpleElement; end
 #     current_class.instance_variables.each do |v|
 #         #puts "Class Instance Variable",  v.to_s
 #         #puts "The instance itself: ", current_class.instance_eval(v.to_s)
-#         ##puts v.to_s[1..-1]
+#         #puts v.to_s[1..-1]
         
 #         if(current_class.instance_eval(v.to_s).respond_to?("attributes"))
 #             if(current_class.instance_eval(v.to_s).attributes.empty?)

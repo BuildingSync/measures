@@ -7,8 +7,6 @@ class AuditHelper
   attr_accessor :audit, :constructions
 
   def initialize(os_model)
-
-
     #make systems
     #constructions
     constructions = os_model.getConstructions
@@ -27,6 +25,8 @@ class AuditHelper
     children[:FoundationSystems] = { value: ch.foundation_systems }
     children[:CeilingSystems] = { value: ch.ceiling_systems}
 
+    lh = LightingSystemsHelper.new(os_model)
+    children[:LightingSystems] = { value: lh.lighting_systems }
     sys = Systems.new(h);
 
 
@@ -77,7 +77,7 @@ class ConstructionSystemsHelper
     windsystems = []
 
     constructions.each do |construction|
-      ##puts("#{construction}")
+      #puts("#{construction}")
       #determine construction type (Wall, Roof, Ceiling, Foundation, Window)
       #createConstruction based on type
       if not construction.name.empty?
@@ -85,19 +85,19 @@ class ConstructionSystemsHelper
         res = self.determine_type_from_name(construction)
         if(res.class.name == "WallSystemType")
           wallsystems.push(res)
-          ##puts("Made Wall")
+          #puts("Made Wall")
         elsif(res.class.name == "CeilingSystemType")
           ceilsystems.push(res)
-          ##puts("Made Ceiling")
+          #puts("Made Ceiling")
         elsif(res.class.name == "FoundationSystemType")
           foundations.push(res)
-          ##puts("Made Foundation")
+          #puts("Made Foundation")
         elsif(res.class.name == "RoofSystemType")
           roofsystems.push(res)
-          ##puts("Made Roof")
+          #puts("Made Roof")
         elsif(res.class.name == "FenestrationSystemType")
           windsystems.push(res)
-          ##puts("Made Fenestration")
+          #puts("Made Fenestration")
         else
           #warning
         end
@@ -141,7 +141,7 @@ class ConstructionSystemsHelper
     name = construction.name.get
     #puts "Passed name", construction.name.get
     if(/wall/i =~ name)
-      ##puts "Found wall
+      #puts "Found wall
       h = {}
       h[:children] = {}
       h[:attributes] = {:ID => { :value => construction.handle.to_s } }
@@ -198,6 +198,7 @@ class FacilitiesHelper
     attributes[:ID] = { value: "Facility-1" }
     children[:FloorAreas] = { value: fah.floor_areas }
     children[:Subsections] = { value: ss.subsections }
+
     facility = FacilityType.new(h)
 
     h={}
@@ -210,6 +211,21 @@ class FacilitiesHelper
   end
 end
 
+#this helper is only designed to help at the Facility Level, not the subsection level
+class FloorsAboveGradeHelper
+  attr_accessor :floors_above_grade
+  def initialize(model)
+
+  end
+end
+
+class FloorsBelowGradeHelper
+  attr_accessor :floors_below_grade
+  def initialize(model)
+
+  end
+
+end
 #assumes that the floor area does not need to be converted
 class FloorAreasHelper
   attr_accessor :floor_areas
@@ -247,8 +263,72 @@ class FloorAreasHelper
   end
 end
 
+#creates lighting systems for the Systems Element
 class LightingSystemsHelper
+  attr_accessor :lighting_systems
+  def initialize(model)
+    #currently the initialization method is designed to create one lighting system for each space
+    lightingsystems = []
+    model.getSpaces.each do |os_space|
+      #puts " #{os_space.thermalZone.get.equipment}"
+      h={}
+      children = {}
+      attributes = {}
+      h[:children] = children
+      h[:attributes] = attributes
+      attributes[:ID] = { value: os_space.handle.to_s + "-lighting" }
+      children[:InstalledPower] = { value: InstalledPower.new({ text: os_space.lightingPower.round(3) })}
+      children[:Location] = { value: Location.new({ text: "Interior" })}
 
+      #linked premises
+      #at a minimum, we want the space object which contains a linked space id and a set of schedules
+      #work inside out, schedules, space id, and then linked premises
+      lsh = {}
+      lchildren = {}
+      lattributes = {}
+      lsh[:children] = lchildren
+      lsh[:attributes] = lattributes
+      lattributes[:IDref] = { value: os_space.handle.to_s }
+      lsid = LinkedSpaceID.new(lsh)
+      puts lsid
+
+      sh = {}
+      schildren = {}
+      sattributes = {}
+      sh[:children] = schildren
+      sh[:attributes] = sattributes
+      lsidarray = []
+      lsidarray.push(lsid)
+      schildren[:LinkedSpaceID] = { value: lsidarray }
+      puts sh
+      sp = Space.new(sh)
+      puts sp
+
+      lph = {}
+      lphchildren = {}
+      lphattributes = {}
+      lph[:children] = lphchildren
+      lph[:attributes] = lphattributes
+      lphchildren[:Space] = { value: sp } #space is child of LinkedPremises
+      lp = LinkedPremises.new(lph)
+      puts lp
+
+      children[:LinkedPremises] = { value: lp } #LinkedPremises is child of LightingSystemType
+      # os_space.thermalZone.get.equipment.each do |equip|
+      #   puts "#{equip}"
+      # end
+      lstype = LightingSystemType.new(h)
+      lightingsystems.push(lstype)
+    end
+    h={}
+    children = {}
+    attributes = {}
+    h[:children] = children
+    h[:attributes] = attributes
+    children[:LightingSystem] = { value: lightingsystems }
+
+    @lighting_systems = LightingSystems.new(h)
+  end
 end
 
 class OccupancyClassificationHelp
@@ -408,6 +488,58 @@ class SchedulesHelp
   end
 end
 
+class SidesHelper
+  attr_accessor :sides
+  def initialize(sides)
+    h={}
+    children = {}
+    h[:children] = children
+    children[:Side] = { value: sides }
+    @sides = Sides.new(h)
+  end
+end
+
+class SideLengthHelper
+  attr_accessor :side_length
+
+  def initialize(side)
+    #relies on GeoHelp for some stuff
+    gh = GeoHelp.new()
+    side.vertices.each_with_index do |vertex,index|
+      if index == side.vertices.length - 1 
+        break
+      end
+      nexti = index+1
+      v1 = gh.SpaceVector(vertex,side.vertices[nexti])
+      xp = gh.UnitVector(gh.XProduct(v1,gh.ZUnit))
+      if(xp[:x] == 0 && xp[:y] == 0 && xp[:z] == 0)
+        #parallel (meaning it is a vertical, so we don't want to use it.)
+        #could be improved to be based on a tolerance as opposed to an absolute number like 0
+      else
+        #puts "Finding Magnitude"
+        mag = gh.MagnitudeVector(v1) #TODO: improve so this conversion from meters to feet is not hardcoded.
+        mag = Conversions.new().convertLength(mag)
+        @side_length = SideLength.new({ text: mag })
+        #puts "Created Side Length of: ", sl.text
+        
+      end
+    end
+    v1 = gh.SpaceVector(side.vertices[0], side.vertices[-1])
+    xp = gh.UnitVector(gh.XProduct(v1,gh.ZUnit))
+    if(xp[:x] == 0 && xp[:y] == 0 && xp[:z] == 0)
+      #parallel (meaning it is a vertical, so we don't want to use it.)
+      #could be improved to be based on a tolerance as opposed to an absolute number like 0
+    else
+      #puts "Finding Magnitude"
+      mag = gh.MagnitudeVector(v1) #TODO: improve so this conversion from meters to feet is not hardcoded.
+      mag = Conversions.new().convertLength(mag)
+      @side_length = SideLength.new({ text: mag })
+      #puts "Created Side Length of: ", sl.text
+    end
+  end
+
+end
+
 class SiteHelper
   attr_accessor :site
   def initialize(os_model)
@@ -496,7 +628,7 @@ class SpaceHelper
   end
 
   
-
+  #deprecated TODO: consider removal as is incomplete
   def makeSpaces(os_spaces)
     #puts "Making spaces now"
     os_spaces.each_with_index do |space, index|
@@ -506,10 +638,10 @@ class SpaceHelper
       h[:children] = children
       h[:attributes] = attributes
       attributes[:ID] = { :value => 'Space-'+index.to_s } 
-      ##puts "#{space}"
+      #puts "#{space}"
       if(not space.spaceType.empty?)
         stype = space.spaceType.get
-        ##puts "#{stype}"
+        #puts "#{stype}"
         oc = OccupancyClassificationHelp.new()
         occClass = oc.getOccupancyClassificationFromOS(stype.name.get) #TODO: can I get the standards type instead of name?
         children[:OccupancyClassification] = { value: occClass}
@@ -524,9 +656,7 @@ class SpaceHelper
       #   #puts "#{tz}"
       # else
       # end
-      tzl = ThermalZoneLayout.new({ text: "SingleZone" }) #TODO: this is really just an assumption I'm not sure how to mount
-      children[:ThermalZoneLayout] = { value: pn }
-      fah = FloorAreasHelper.new(Conversions.new().convertArea(space.floorArea))
+
 
       children[:FloorAreas] = { value: fah.floor_areas }
 
@@ -567,6 +697,14 @@ class SubsectionsHelper
       #TODO better method for footprint shape
       children[:FootprintShape] = { value: FootprintShape.new( { text:"Rectangular" } )}
       children[:ThermalZoneLayout] = { value: ThermalZoneLayout.new( { text:"Single zone" } )}
+
+      #make sides
+      bs_surfs = SurfacesHelper.new({ os_surfaces: os_space.surfaces })
+      children[:Sides] = { value: bs_surfs.sides }
+      children[:RoofID] = { value: bs_surfs.roofs }
+      children[:FoundationID] = { value: bs_surfs.foundations }
+      children[:CeilingID] = { value: bs_surfs.ceilings }
+      #puts "Surfaces to be made sides etc. #{bs_surfs}"
       subsections_arr.push(Subsection.new(h))
     end
 
@@ -640,7 +778,7 @@ class ThermalZonesHelper
 
     #make space stuff
     sh = SpaceHelper.new(os_space)
-    puts sh.space
+   #puts sh.space
 
     shash = {}
     sattr = {}
@@ -652,7 +790,7 @@ class ThermalZonesHelper
 
     children[:Spaces] = { value: spaces }
     @thermal_zone = ThermalZoneType.new(h)
-    puts @thermal_zone.children
+   #puts @thermal_zone.children
     #make thermalzones object
 
     h={}
@@ -674,18 +812,53 @@ class ThermalZonesHelper
   end
 end
 
+class WallIDHelper
+  attr_accessor :wall_id
+  def initialize(side)
+    #reliance on GeoHelp
+    gh = GeoHelp.new()
+    if(side.vertices.length == 4)
+      h = {}
+      if not side.construction.empty?
+        construction = side.construction.get
+        #puts "Making wallID for construction #{construction.handle}"
+        h[:attributes] = { IDref: { value: construction.handle.to_s } }
+        wallarea = gh.calculate_surface_area(side.vertices)
+        wa = WallArea.new({ text: wallarea })
+        h[:children] = { WallArea: { required: false, value: wa } }
+      else
+
+      end
+    else
+      #lets just not write the algorithm yet to determine the wall area for this more complicated case
+      #puts "WARNING: Surface area could not be calculated for WallID"
+      if not side.construction.empty?
+        construction = side.construction.get
+        h[:attributes] = { IDref: { text: construction.handle.to_s } }
+      end
+    end
+    @wall_id = WallID.new(h)
+  end
+end
 
 #general purpose helpers
 class Conversions
-  def initialize;end
+  attr_accessor :round_place
+  def initialize(round=nil)
+    if(round.nil?)
+      @round_place = 2
+    else
+      @round_place = round
+    end
+  end
   def convertArea(area)
-    return area / 0.3048 / 0.3048
+    return (area / 0.3048 / 0.3048).round(round_place)
   end
   def convertLength(length)
-    return length / 0.3048
+    return (length / 0.3048).round(round_place)
   end
   def convertVolume(volume)
-    return volume / 0.3048 / 0.3048 / 0.3048
+    return (volume / 0.3048 / 0.3048 / 0.3048).round(round_place)
   end
 end
 
@@ -725,6 +898,7 @@ class GeoHelp
 
   #a method to make a Vector in 3D Space from two Point3Ds
   def SpaceVector(p1,p2)
+    #puts "Passed vertices #{p1} #{p2}"
     x = p1.x - p2.x
     y = p1.y - p2.y
     z = p1.z - p2.z
@@ -747,7 +921,7 @@ class GeoHelp
       v2 = self.SpaceVector(vertices[1],vertices[2])
       mag1 = self.MagnitudeVector(v1)
       mag2 = self.MagnitudeVector(v2)
-      area = mag1 * mag2 / (0.3048 * 0.3048) #TODO Improve this so it is not harcoded.
+      area = Conversions.new().convertArea(mag1 * mag2)
       return area
     else
       raise "WARNING, surface area could not be calculated."
@@ -775,38 +949,39 @@ class GeoHelp
   def getFootprintShape(flCoords)
     flCoords = "Checking floorshape algorithm"
     #algorithm to determine the shape TBD
-    ##puts flCoords
-    retval = FootprintShape.new({ :text=>"Rectangular" })
+    #puts flCoords
+    retval = FootprintShape.new({ text: "Rectangular" })
     return retval
   end
 
   #deterimines if side length can be computed, if it can, it is computed and returned
-  def makeSideLength(side)
-    ##puts "Finding Side Length"
-    side.vertices.each_with_index do |vertex,index|
-      nexti = index+1
-      v1 = self.SpaceVector(vertex,side.vertices[nexti])
-      xp = self.UnitVector(XProduct(v1,self.ZUnit))
-      if(xp[:x] == 0 && xp[:y] == 0 && xp[:z] == 0)
-        #parallel (meaning it is a vertical, so we don't want to use it.)
-        #could be improved to be based on a tolerance as opposed to an absolute number like 0
-      else
-        ##puts "Finding Magnitude"
-        mag = MagnitudeVector(v1) #TODO: improve so this conversion from meters to feet is not hardcoded.
-        mag = mag / 0.3048
-        sl = SideLength.new({ :text => mag })
-        ##puts "Created Side Length of: ", sl.text
-        return sl
-      end
-    end
-  end
+  #deprecated TODO: remove
+  # def makeSideLength(side)
+  #   #puts "Finding Side Length"
+  #   side.vertices.each_with_index do |vertex,index|
+  #     nexti = index+1
+  #     v1 = self.SpaceVector(vertex,side.vertices[nexti])
+  #     xp = self.UnitVector(XProduct(v1,self.ZUnit))
+  #     if(xp[:x] == 0 && xp[:y] == 0 && xp[:z] == 0)
+  #       #parallel (meaning it is a vertical, so we don't want to use it.)
+  #       #could be improved to be based on a tolerance as opposed to an absolute number like 0
+  #     else
+  #       #puts "Finding Magnitude"
+  #       mag = MagnitudeVector(v1) #TODO: improve so this conversion from meters to feet is not hardcoded.
+  #       mag = mag / 0.3048
+  #       sl = SideLength.new({ text: mag })
+  #       #puts "Created Side Length of: ", sl.text
+  #       return sl
+  #     end
+  #   end
+  # end
 
   def makeSubSurfaces(side)
-    ##puts "Making subsurface"
+    #puts "Making subsurface"
     fenestrationareas = {}
     side.subSurfaces.each do |sub|
       if(/window/i =~ sub.subSurfaceType)
-        ##puts "Making a WindowID subsurface #{sub.construction.get.name.get}"
+        #puts "Making a WindowID subsurface #{sub.construction.get.name.get}"
         if not sub.construction.empty? #TODO: change to initialized?
           construction = sub.construction.get
           if not construction.name.empty?
@@ -833,15 +1008,15 @@ class GeoHelp
     ret[:WindowID] = []
     wallarea = self.calculate_surface_area(side.vertices)
     fenestrationareas.keys.each do |k|
-      wwr = fenestrationareas[k].text / wallarea
-      ww = WindowToWallRatio.new({ :text => wwr })
-      pws = PercentOfWindowAreaShaded.new({ :text => 0 }) #TODO, could be improved, but unclear how
+      wwr = (fenestrationareas[k].text / wallarea).round(3) #TODO, should this be hardcoded rounding
+      ww = WindowToWallRatio.new({ text: wwr })
+      pws = PercentOfWindowAreaShaded.new({ text: 0 }) #TODO, could be improved, but unclear how
       h = {}
       children = {}
       children[:FenestrationArea] = { :value => fenestrationareas }
       children[:WindowToWallRatio] = { :value => ww }
       children[:PercentOfWindowAreaShaded] = { :value => pws }
-      attributes = { :IDref => { :text => k } }
+      attributes = { :IDref => { text: k } }
       h[:children] = children
       h[:attributes] = attributes
       windowID = WindowID.new(h)
@@ -853,35 +1028,37 @@ class GeoHelp
 
   end
 
-  def makeWallID(side)
-    ##puts "Making WallID"
-    if(side.vertices.length == 4)
-      h = {}
-      if not side.construction.empty?
-        construction = side.construction.get
-        if not construction.name.empty?
-          h[:attributes] = { :IDref => { :text => construction.name.get } }
-          wallarea = self.calculate_surface_area(side.vertices)
-          wa = WallArea.new({ :text => wallarea })
-          h[:children] = { :WallArea => { :required => false, :value => wa } }
+  #deprecated TODO: remove
+  # def makeWallID(side)
+  #   #puts "Making WallID"
+  #   if(side.vertices.length == 4)
+  #     h = {}
+  #     if not side.construction.empty?
+  #       construction = side.construction.get
+  #       if not construction.name.empty?
+  #         p "Making wallID for construction #{construction.handle}"
+  #         h[:attributes] = { :IDref => { text: construction.handle.to_s } }
+  #         wallarea = self.calculate_surface_area(side.vertices)
+  #         wa = WallArea.new({ text: wallarea })
+  #         h[:children] = { :WallArea => { :required => false, :value => wa } }
           
-        else
-          #throw an error that this could not be gotten and the WallID could not be made
-        end
-      end
-    else
-      #lets just not write the algorithm yet
-      #puts "WARNING: Surface area could not be calculated for WallID"
-      if not side.construction.empty?
-        construction = side.construction.get
-        if not construction.name.empty?
-          h[:attributes] = { :IDref => { :text => construction.name.get } }
-        end
-      end
-    end
-      wid = WallID.new(h)
-      return wid
-  end
+  #       else
+  #         #throw an error that this could not be gotten and the WallID could not be made
+  #       end
+  #     end
+  #   else
+  #     #lets just not write the algorithm yet
+  #     #puts "WARNING: Surface area could not be calculated for WallID"
+  #     if not side.construction.empty?
+  #       construction = side.construction.get
+  #       if not construction.name.empty?
+  #         h[:attributes] = { :IDref => { text: construction.handle.to_s } }
+  #       end
+  #     end
+  #   end
+  #     wid = WallID.new(h)
+  #     return wid
+  # end
 
   def explainTry
     begin 
@@ -906,11 +1083,213 @@ class GeoHelp
     #an algorithm to figure out the type of ThermalZoneLayout
   end
 
-  #returns the sides
-  def defineSidesFromOS_Surfaces(args)
-    #classify the shape in order to understand how to write the sides
+  #deprecated #TODO: remove
+  # def defineSidesFromOS_Surfaces(args)
+  #   #classify the shape in order to understand how to write the sides
+  #   #cannot run this method if these arguments are not passed in
+  #   if(([:os_surfaces, :os_constructions] - args.keys).empty?)
+  #     foundations = []
+  #     subsurfbool = false
+
+  #     shape = "Rectangular" #TODO: shape should be determined based on the floor, or passed into this method
+  #     args[:os_surfaces].each do |surface|
+  #       #puts "Surface tilt:",toDeg(surface.tilt)
+  #       if(surface.subSurfaces.length > 0) 
+  #         subsurfbool = true
+  #       end
+
+  #       if(toDeg(surface.tilt) > 45 && toDeg(surface.tilt) <= 135)
+  #         #puts "Found OS side."
+  #         self.os_sides.push(surface)
+  #       elsif (toDeg(surface.tilt) > 135)
+  #         foundations.push(surface)
+  #         if(surface.isPartOfEnvelope)
+  #           self.os_foundations.push(surface)
+  #         else
+  #           #TODO:  do nothing?  or is this a ceiling?
+  #         end
+  #         #this is what I need to figure out the footprint shape
+  #         if(surface.vertices.length == 4)
+  #           shape = "Rectangular"
+  #         else
+  #           #shape should be something else
+  #           #puts "Unhandled floor shape exception: vertices are not equal to 4."
+  #         end
+          
+  #       else
+  #         #determine the difference between a ceiling and a roof
+  #         if(surface.isPartOfEnvelope)
+  #           self.os_roofs.push(surface)
+  #         else
+  #           self.os_ceilings.push(surface)
+  #         end
+  #       end
+  #     end #end the looping through all os_surfaces
+  #     #puts "Found #{self.os_sides.length} sides in OS"
+  #     #puts "Found #{self.os_foundations.length} foundations in OS"
+  #     #puts "Found #{self.os_roofs.length} in OS"
+  #     #make roofids
+  #     self.os_roofs.each do |os_roof|
+  #       h={}
+  #       subsurfbool = false #needs to be reset #TODO: this could be made much more programmer friendly
+  #       attributes = {}
+  #       children = {}
+  #       h[:children] = children
+  #       h[:attributes] = attributes
+  #       if not os_roof.construction.empty?
+  #         if not os_roof.construction.get.name.empty?
+  #           name = os_roof.construction.get.name.get
+  #           attributes[:IDref] = { text: name }
+  #           roofarea = self.calculate_surface_area(os_roof.vertices)
+  #           ra = RoofArea.new({ text: roofarea })
+  #           ria = RoofInsulatedArea.new({ text: roofarea }) #TODO: need to find a more robust way of checking for this
+  #           children[:RoofArea] = { :required => false, value: ra }
+  #           children[:RoofInsulatedArea] = { :required => false, value: ria }
+  #           skylights= []
+  #           if(os_roof.subSurfaces.length > 0)
+  #             os_roof.subSurfaces.each do |sub|
+  #               id = sub.construction.get.name.get
+  #               skyarea = self.calculate_surface_area(sub.vertices)
+  #               if(skylights.has_key? id)
+  #                 skylights[id][:text] += skyarea/roofarea
+  #               else
+
+  #                 pa = PercentageSkylightArea.new({ text: skyarea/roofarea })
+  #                 skylight = new.SkylightID({:attributes => {:IDref=>id } },{:children => pa})
+  #                 skylights.push(skylight) 
+  #               end
+  #             end
+  #             children[:SkylightID] = { :required => false, value: skylights }
+  #           end
+  #           bs_roof = RoofID.new(h)
+  #           self.roofs.push(bs_roof)
+  #         end
+  #       end
+  #     end
+  #     #make foundation ids
+  #     self.os_foundations.each do |os_foundation|
+  #       #the root of FoundationID
+  #       h = {}
+  #       attributes = {}
+  #       children = {}
+  #       h[:children] = children
+  #       h[:attributes] = attributes
+  #       if not os_foundation.construction.empty?
+  #         if not os_foundation.construction.get.name.empty?
+  #           name = os_foundation.construction.get.name.get
+  #           attributes[:IDref] = { text: name }
+  #           floorarea = self.calculate_surface_area(os_foundation.vertices)
+  #           fa = FoundationArea.new({ text: floorarea })
+  #           children[:FoundationArea] = { required: false, value: fa }
+  #           if not os_foundation.space.empty?
+  #             if not os_foundation.space.get.name.empty?
+  #               spacenm = os_foundation.space.get.name.get
+  #               #puts "Foundation space name #{spacenm}"
+  #             else
+  #               #puts "WARNING: Unknown space name for this foundation #{os_foundation.name}"
+  #             end
+  #           else
+  #             #puts "ERROR: Unknown space for this foundation #{os_foundation.name}"
+  #           end
+  #           #skipping the slab insulation orientation
+            
+  #         end #TODO, consider adding an error if the name is not available
+  #       end #TODO, consider adding an error if the construction is not available
+  #       #we assume that all of the foundations are just slab on grade
+  #       #should we #put in a second check to see if the z-level is 0 for this slab? 
+  #       #or do we look at outdoor conditions = ground?
+        
+  #     end
+  #     #this should be moved as a test inside of the sides each do loop?
+  #     if(shape == "Rectangular")
+  #       #puts "Making sides."
+  #       self.os_sides.each do |os_side|
+  #         subsurfbool = false #needs to be reset #TODO: this could be made much more programmer friendly
+  #         #puts "Is part of Envelope? ",side.isPartOfEnvelope
+  #         #puts "Azimuth: ", toDeg(side.azimuth)
+  #         #puts "Number of subsurfaces: #{os_side.subSurfaces.length}"
+          
+  #         if(os_side.isPartOfEnvelope)
+  #           h = {}
+  #           sl = self.makeSideLength(os_side)
+  #           wid = self.makeWallID(os_side)
+  #           if(os_side.subSurfaces.length >= 1)
+  #             subs = self.makeSubSurfaces(os_side) #returns a hash of Fenestration and Door arrays as {:WindowID => [], :DoorID =>[]}
+  #             #puts "Subsurface objects created: #{subs}"
+  #             h[:WindowID] = { :value => subs[:WindowID] }
+  #           end
+
+  #           h[:SideLength] = { :required => false, value: sl }
+  #           h[:WallID] = { :required => false, value: wid }
+  #           if(toDeg(os_side.azimuth) == 0)
+  #             if(os_side.isPartOfEnvelope)
+  #               #puts "Making Rect A1"
+  #               sn = SideNumber.new({ text: "A1" })
+  #               h[:SideNumber] = { :required => false, value: sn }
+  #               #puts "Completed Rect A1", sides
+  #             else #puts "Is not part of envelope, will not write out."
+  #             end
+  #           elsif(toDeg(os_side.azimuth) == 90)
+  #             if(os_side.isPartOfEnvelope)
+  #               sn = SideNumber.new( text: "B1")
+  #               h[:SideNumber] = { :required=>false,value: sn }
+  #               #puts "Completed Rect B1", sides
+  #             else #puts "Is not part of envelope, will not write out."
+  #             end
+  #           elsif(toDeg(os_side.azimuth) == 180)
+  #             if(os_side.isPartOfEnvelope)
+  #               sn = SideNumber.new( text: "C1")
+  #               h[:SideNumber] = { :required=>false,value: sn }
+  #               #puts "Completed Rect C1", sides
+  #             else #puts "Is not part of envelope, will not write out."
+  #             end
+  #           elsif(toDeg(os_side.azimuth) == 270)
+  #             if(os_side.isPartOfEnvelope)
+  #               sn = SideNumber.new( text: "D1")
+  #               h[:SideNumber] = { :required=>false,value: sn }
+  #               #puts "Completed Rect D1", sides
+  #             else #puts "Is not part of envelope, will not write out."
+  #             end
+  #           else
+  #             #puts "WARNING: Unhandled side creation for rectangular shape."
+  #           end 
+  #           en = {:children => h}
+  #           #puts "Making side"
+  #           bs_side = Side.new(en)  
+  #           #puts "Made side #{bs_side.children}"
+  #           self.sides.push(bs_side)
+  #         end
+  #       end
+  #     else
+  #       #puts "WARNING: Unhandled floor shape exception: not rectangular"
+  #     end
+  #     #puts "Sides created:", self.sides.length
+  #     #puts "Roofs created:", self.roofs.length
+  #   else
+  #     #throw some error
+  #   end
+  # end
+
+end
+
+#classify the shape in order to understand how to write the sides
+class SurfacesHelper
+  attr_accessor :sides, :os_sides, :roofs, :os_roofs, :os_ceilings, :ceilings, :foundations, :os_foundations
+  #returns the side
+  def initialize(args)
+    gh = GeoHelp.new() #requires geohelper to function
+    @sides = []
+    @os_sides = []
+    @roofs = []
+    @os_roofs = []
+    @os_ceilings = []
+    @ceilings = []
+    @foundations = []
+    @os_foundations = []
+
+
     #cannot run this method if these arguments are not passed in
-    if(([:os_surfaces, :os_constructions] - args.keys).empty?)
+    if(([:os_surfaces] - args.keys).empty?)
       foundations = []
       subsurfbool = false
 
@@ -921,15 +1300,16 @@ class GeoHelp
           subsurfbool = true
         end
 
-        if(toDeg(surface.tilt) > 45 && toDeg(surface.tilt) <= 135)
-          ##puts "Found OS side."
-          self.os_sides.push(surface)
-        elsif (toDeg(surface.tilt) > 135)
+        if(gh.toDeg(surface.tilt) > 45 && gh.toDeg(surface.tilt) <= 135) #GeoHelp
+          #puts "Found OS side."
+          @os_sides.push(surface)
+        elsif (gh.toDeg(surface.tilt) > 135) #GeoHelp
           foundations.push(surface)
           if(surface.isPartOfEnvelope)
-            self.os_foundations.push(surface)
+            @os_foundations.push(surface)
           else
-            #TODO:  do nothing?  or is this a ceiling?
+            puts "Found ceiling #{surface}"
+            @os_ceilings.push(surface)
           end
           #this is what I need to figure out the footprint shape
           if(surface.vertices.length == 4)
@@ -942,157 +1322,170 @@ class GeoHelp
         else
           #determine the difference between a ceiling and a roof
           if(surface.isPartOfEnvelope)
-            self.os_roofs.push(surface)
+            @os_roofs.push(surface)
           else
-            self.os_ceilings.push(surface)
+            puts "Found ceiling #{surface}"
+            @os_ceilings.push(surface)
           end
         end
       end #end the looping through all os_surfaces
-      #puts "Found #{self.os_sides.length} sides in OS"
-      #puts "Found #{self.os_foundations.length} foundations in OS"
-      #puts "Found #{self.os_roofs.length} in OS"
+      #puts "Found #{@os_sides.length} sides in OS"
+      #puts "Found #{@os_foundations.length} foundations in OS"
+      #puts "Found #{@os_roofs.length} in OS"
       #make roofids
-      self.os_roofs.each do |os_roof|
+      @os_roofs.each do |os_roof|
         h={}
         subsurfbool = false #needs to be reset #TODO: this could be made much more programmer friendly
         attributes = {}
         children = {}
         h[:children] = children
         h[:attributes] = attributes
-        if not os_roof.construction.empty?
-          if not os_roof.construction.get.name.empty?
-            name = os_roof.construction.get.name.get
-            attributes[:IDref] = { text: name }
-            roofarea = self.calculate_surface_area(os_roof.vertices)
-            ra = RoofArea.new({ :text=>roofarea })
-            ria = RoofInsulatedArea.new({ :text=>roofarea }) #TODO: need to find a more robust way of checking for this
-            children[:RoofArea] = { :required => false, :value=>ra }
-            children[:RoofInsulatedArea] = { :required => false, :value=>ria }
-            skylights= []
-            if(os_roof.subSurfaces.length > 0)
-              os_roof.subSurfaces.each do |sub|
-                id = sub.construction.get.name.get
-                skyarea = self.calculate_surface_area(sub.vertices)
-                if(skylights.has_key? id)
-                  skylights[id][:text] += skyarea/roofarea
-                else
 
-                  pa = PercentageSkylightArea.new({ :text => skyarea/roofarea })
-                  skylight = new.SkylightID({:attributes => {:IDref=>id } },{:children => pa})
-                  skylights.push(skylight) 
-                end
-              end
-              children[:SkylightID] = { :required => false, :value=>skylights }
-            end
-            bs_roof = RoofID.new(h)
-            self.roofs.push(bs_roof)
+        name = os_roof.handle
+        attributes[:IDref] = { value: name }
+        roofarea = gh.calculate_surface_area(os_roof.vertices) #GeoHelp
+        ra = RoofArea.new({ text: roofarea })
+        ria = RoofInsulatedArea.new({ text:roofarea }) #TODO: need to find a more robust way of checking for this
+        children[:RoofArea] = { value:ra }
+        children[:RoofInsulatedArea] = { value:ria }
+        skylights = []
+        puts "OS_Roof Subsurface length #{os_roof.subSurfaces.length}"
+        if(os_roof.subSurfaces.length > 0)
+          puts "There are skylights, first time for everything."
+          os_roof.subSurfaces.each do |sub|
+            sah = {}
+            sachildren = []
+            saatts = []
+            sah[:children] = sachildren
+            sah[:attr_accessor] = saatts
+            id = sub.handle
+            skyarea = gh.calculate_surface_area(sub.vertices) #GeoHelp
+            pa = PercentageSkylightArea.new({ text: skyarea/roofarea.round(3) })
+            sachildren[:PercentageSkylightArea] = { value: pa }
+            saatts[:IDref] = { value: id }
+            skylight = SkylightID.new(sah)
+            skylights.push(skylight) 
           end
         end
+        children[:SkylightID] = { value: skylights }
+        bs_roof = RoofID.new(h)
+        @roofs.push(bs_roof)
+
       end
       #make foundation ids
-      self.os_foundations.each do |os_foundation|
+      @os_foundations.each do |os_foundation|
         #the root of FoundationID
         h = {}
         attributes = {}
         children = {}
         h[:children] = children
         h[:attributes] = attributes
-        if not os_foundation.construction.empty?
-          if not os_foundation.construction.get.name.empty?
-            name = os_foundation.construction.get.name.get
-            attributes[:IDref] = { text: name }
-            floorarea = self.calculate_surface_area(os_foundation.vertices)
-            fa = FoundationArea.new({ text: floorarea })
-            children[:FoundationArea] = { required: false, value: fa }
-            if not os_foundation.space.empty?
-              if not os_foundation.space.get.name.empty?
-                spacenm = os_foundation.space.get.name.get
-                #puts "Foundation space name #{spacenm}"
-              else
-                #puts "WARNING: Unknown space name for this foundation #{os_foundation.name}"
-              end
-            else
-              #puts "ERROR: Unknown space for this foundation #{os_foundation.name}"
-            end
-            #skipping the slab insulation orientation
-            
-          end #TODO, consider adding an error if the name is not available
-        end #TODO, consider adding an error if the construction is not available
-        #we assume that all of the foundations are just slab on grade
-        #should we #put in a second check to see if the z-level is 0 for this slab? 
-        #or do we look at outdoor conditions = ground?
-        
+        #puts os_foundation
+        attributes[:IDref] = { value: os_foundation.handle.to_s }
+        floorarea = gh.calculate_surface_area(os_foundation.vertices) #GeoHelp
+        fa = FoundationArea.new({ text: floorarea })
+        children[:FoundationArea] = { value: fa }
+        @foundations.push(FoundationID.new(h))
+
+        #TODO: consider adding space names and thermal zone names.  For now, these are not included
+        if not os_foundation.space.empty?
+          if not os_foundation.space.get.name.empty?
+            spacenm = os_foundation.space.get.name.get
+            #puts "Foundation space name #{spacenm}"
+          else
+            #puts "WARNING: Unknown space name for this foundation #{os_foundation.name}"
+          end
+        else
+          #puts "ERROR: Unknown space for this foundation #{os_foundation.name}"
+        end
+        #skipping the slab insulation orientation
+
+        #we assume that all of the foundations are just slab on grade as defined in BuildingSync
       end
+
+      @os_ceilings.each do |os_ceiling|
+        h = {}
+        attributes = {}
+        children = {}
+        h[:children] = children
+        h[:attributes] = attributes
+        attributes[:IDref] = { text: os_ceiling.handle.to_s }
+        area = gh.calculate_surface_area(os_ceiling.vertices) #GeoHelp
+        fa =CeilingArea.new({ text: floorarea })
+        children[:CeilingArea] = { value: fa }
+        #by its nature a ceiling has no insulation for commercial buildings?
+        #TODO, this could be improved but the use case needs better explanation
+        chilren[:CeilingInsulatedArea] = { value: CeilingInsulatedArea.new({ text: 0 })}
+        @ceilings.push(CeilingID.new(h))
+      end
+
       #this should be moved as a test inside of the sides each do loop?
       if(shape == "Rectangular")
-        ##puts "Making sides."
-        self.os_sides.each do |os_side|
+        #puts "Making sides."
+        @os_sides.each do |os_side|
           subsurfbool = false #needs to be reset #TODO: this could be made much more programmer friendly
-          ##puts "Is part of Envelope? ",side.isPartOfEnvelope
-          ##puts "Azimuth: ", toDeg(side.azimuth)
-          ##puts "Number of subsurfaces: #{os_side.subSurfaces.length}"
+          #puts "Is part of Envelope? ",side.isPartOfEnvelope
+          #puts "Azimuth: ", toDeg(side.azimuth)
+          #puts "Number of subsurfaces: #{os_side.subSurfaces.length}"
           
           if(os_side.isPartOfEnvelope)
             h = {}
-            sl = self.makeSideLength(os_side)
-            wid = self.makeWallID(os_side)
-            if(os_side.subSurfaces.length >= 1)
-              subs = self.makeSubSurfaces(os_side) #returns a hash of Fenestration and Door arrays as {:WindowID => [], :DoorID =>[]}
-              ##puts "Subsurface objects created: #{subs}"
+            if(os_side.subSurfaces.length > 0)
+              subs = gh.makeSubSurfaces(os_side) #returns a hash of Fenestration and Door arrays as {:WindowID => [], :DoorID =>[]}
+              #puts "Subsurface objects created: #{subs}"
               h[:WindowID] = { :value => subs[:WindowID] }
             end
 
-            h[:SideLength] = { :required => false, :value=>sl }
-            h[:WallID] = { :required => false, :value=>wid }
-            if(toDeg(os_side.azimuth) == 0)
+            h[:SideLength] = { :required => false, value:  SideLengthHelper.new(os_side).side_length }
+            h[:WallID] = { :required => false, value:  WallIDHelper.new(os_side).wall_id }
+            if(gh.toDeg(os_side.azimuth) == 0) #GeoHelp
               if(os_side.isPartOfEnvelope)
-                ##puts "Making Rect A1"
-                sn = SideNumber.new({ :text => "A1" })
-                h[:SideNumber] = { :required => false, :value=>sn }
-                ##puts "Completed Rect A1", sides
-              else ##puts "Is not part of envelope, will not write out."
+                #puts "Making Rect A1"
+                sn = SideNumber.new({ text: "A1" })
+                h[:SideNumber] = { :required => false, value: sn }
+                #puts "Completed Rect A1", sides
+              else #puts "Is not part of envelope, will not write out."
               end
-            elsif(toDeg(os_side.azimuth) == 90)
+            elsif(gh.toDeg(os_side.azimuth) == 90) #GeoHelp
               if(os_side.isPartOfEnvelope)
-                sn = SideNumber.new( :text => "B1")
-                h[:SideNumber] = { :required=>false,:value=>sn }
-                ##puts "Completed Rect B1", sides
-              else ##puts "Is not part of envelope, will not write out."
+                sn = SideNumber.new( text: "B1")
+                h[:SideNumber] = { :required=>false,value: sn }
+                #puts "Completed Rect B1", sides
+              else #puts "Is not part of envelope, will not write out."
               end
-            elsif(toDeg(os_side.azimuth) == 180)
+            elsif(gh.toDeg(os_side.azimuth) == 180) #GeoHelp
               if(os_side.isPartOfEnvelope)
-                sn = SideNumber.new( :text => "C1")
-                h[:SideNumber] = { :required=>false,:value=>sn }
-                ##puts "Completed Rect C1", sides
-              else ##puts "Is not part of envelope, will not write out."
+                sn = SideNumber.new( text: "C1")
+                h[:SideNumber] = { :required=>false,value: sn }
+                #puts "Completed Rect C1", sides
+              else #puts "Is not part of envelope, will not write out."
               end
-            elsif(toDeg(os_side.azimuth) == 270)
+            elsif(gh.toDeg(os_side.azimuth) == 270) #GeoHelp
               if(os_side.isPartOfEnvelope)
-                sn = SideNumber.new( :text => "D1")
-                h[:SideNumber] = { :required=>false,:value=>sn }
-                ##puts "Completed Rect D1", sides
-              else ##puts "Is not part of envelope, will not write out."
+                sn = SideNumber.new( text: "D1")
+                h[:SideNumber] = { :required=>false,value: sn }
+                #puts "Completed Rect D1", sides
+              else #puts "Is not part of envelope, will not write out."
               end
             else
               #puts "WARNING: Unhandled side creation for rectangular shape."
             end 
             en = {:children => h}
-            ##puts "Making side"
+            #puts "Making side"
             bs_side = Side.new(en)  
-            ##puts "Made side #{bs_side.children}"
-            self.sides.push(bs_side)
+            #puts "Made side #{bs_side.children}"
+            @sides.push(bs_side)
           end
         end
       else
         #puts "WARNING: Unhandled floor shape exception: not rectangular"
       end
-      #puts "Sides created:", self.sides.length
-      #puts "Roofs created:", self.roofs.length
+      #puts "Sides created:", @sides.length
+      #puts "Roofs created:", @roofs.length
     else
       #throw some error
     end
   end
-
 end
 
 class WriteXML
@@ -1107,35 +1500,43 @@ class WriteXML
     @typeSub = ""
   end
 
+  def WritePretty
+    formatter = Formatters::Pretty.new(2)
+    formatter.compact = true
+    #xmlDoc.write(File.open("some.xml", "w"), 2)
+    #formatter.write(@xmlDoc,"some.xml")
+    File.open("some.xml", "w"){ |file| file.puts formatter.write(@xmlDoc.root,"")}
+  end
+
   #this returns the immediate children and attributes as a hash instead of instance variables of the given class
   def to_hash(obj)
 
     hash = obj.instance_variables.each_with_object({}) { |var, hash| hash[var.to_s.delete("@").to_sym] = obj.instance_variable_get(var) }
-    ##puts "Basic to_hash #{hash}"
+    #puts "Basic to_hash #{hash}"
     allowable_keys = [:value,:text,:children,"value","text","children"]
     if(hash.is_a?(Hash))
       if(hash.keys.any? {|x| allowable_keys.include?(x) })
         if(hash.has_key?(:text) || hash.has_key?("text"))
           #write text for the latest element
-          ##puts "Route 1"
+          #puts "Route 1"
           textkey = hash.keys.find{ |k| k == :text || k == "text" }
           if(!hash[textkey].nil?)
-            ##puts "Route 1a"
+            #puts "Route 1a"
             #do something, generally here we are at the end and there is a string, nothing to do
           end
         end
         if(hash.has_key? :value || hash.has_key?("value"))
           #is the value an array, or an object?
-          ##puts "Route 2"
+          #puts "Route 2"
           valuekey = hash.keys.find{ |k| k == :value || k == "value" }
           if(hash[valuekey].is_a?(Array))
-            ##puts "Route 2 - array"
+            #puts "Route 2 - array"
             h[valuekey].each do |a|
               #this is an array each of which is supposed to be an object, that also has to be hashified
               #likely here is where we would have a recursive call
             end
           else
-            ##puts "Route 2 - value on #{valuekey}"
+            #puts "Route 2 - value on #{valuekey}"
             if(hash[valuekey].is_a?(Hash))
               #I dont think this will happen anymore
             else
@@ -1145,7 +1546,7 @@ class WriteXML
           end
         end
         if(hash.has_key?(:children) ||hash.has_key?("children"))
-          ##puts "Route 3"
+          #puts "Route 3"
           childrenkey = hash.keys.find{ |k| k == :children || k == "children" }
           if(hash[childrenkey].keys.length > 0)
             hash[childrenkey].keys.each do |k| #this recursively starts to loop through the keys of a given child
@@ -1153,34 +1554,34 @@ class WriteXML
               valuekey = child.keys.find{|k| k == "value" || k == :value } #immediately look for a value, because every child will contain a value
               if(child.has_key? valuekey)
                 if(child[valuekey].is_a?(Array))
-                  ##puts "Route 3-a for #{child[valuekey]}"
+                  #puts "Route 3-a for #{child[valuekey]}"
                   child[valuekey].each_with_index do |c,index|
 
                     #it is expected that each of these values of a child will be an object of some kind
                     child[valuekey][index] = to_hash(c)
-                    ##puts child[valuekey][index]
+                    #puts child[valuekey][index]
                   end
                 else
                   #likely we want to resurse here
-                  ##puts "Route 3-b for #{child[valuekey]}"
+                  #puts "Route 3-b for #{child[valuekey]}"
                   child[valuekey] = to_hash(child[valuekey])
                 end
               else
-                ##puts "Unanticipated error."
+                #puts "Unanticipated error."
               end
             end #end of array each loop
           else
-            ##puts "The children hash is empty for #{hash}"
+            #puts "The children hash is empty for #{hash}"
             #remove empty children
             hash.delete(childrenkey)
           end
         end
         if(hash.has_key?(:attributes) ||hash.has_key?("attributes"))
-          ##puts "Route 4"
+          #puts "Route 4"
           attkey = hash.keys.find{ |k| k == :attributes || k == "attributes" }
           if(hash[attkey].keys.length == 0)
             #this is the only possibility we currently have at the moment.
-            ##puts "The attributes hash is empty"
+            #puts "The attributes hash is empty"
             hash.delete(attkey)
           end
         end
@@ -1189,13 +1590,13 @@ class WriteXML
       #puts "Bigtime error, expected successful hash conversion."
     end
     #adds the object class name as the key at the fromt of the hash, else it wouldn't be included
-    ##puts obj.class.name
+    #puts obj.class.name
     hash = { obj.class.name.to_sym => hash }
     return hash
   end
 
   #pass the attributes has as we've made it and make it one that rexml can use
-  #it relies on a structure like this, e.g. : {:attributes=>{:ID=>{:value=>"Typical Insulated Steel Framed Exterior Wall R-18.18"}}}
+  #it relies on a structure like this, e.g. : {:attributes=>{:ID=>{value: "Typical Insulated Steel Framed Exterior Wall R-18.18"}}}
   def make_rexml_att_hash(our_hash)
     rexml_hash = {}
     our_hash.keys.each do |key|
@@ -1268,7 +1669,7 @@ class WriteXML
                 #puts "Made normal element #{current_key}"
               end
               #fast forward into this object
-              inner = h[current_key][:value][current_key] ##puts me one nest in, at { :children :attributes}
+              inner = h[current_key][:value][current_key] #puts me one nest in, at { :children :attributes}
               #puts "Inner is #{inner}"
               child_keys = inner.keys
               #puts child_keys
@@ -1415,13 +1816,13 @@ class WriteXML
   #           if h[k][:value].keys[0] == k #first match
   #             #puts "Matches as expected"
   #             #fast forward into this object
-  #             inner = h[k][:value][k] ##puts me one nest in, at { :children :attributes}
-  #             ##puts "Inner is #{inner}"
+  #             inner = h[k][:value][k] #puts me one nest in, at { :children :attributes}
+  #             #puts "Inner is #{inner}"
   #             standard_keys_s = standard_keys
   #             standard_keys_s.map { |x| x.to_s}
   #             if (inner[:children].keys & standard_keys_s).empty? #set intersection to ensure that we are getting a key *other* than standard"
   #               firstKey = inner[:children].keys[0]
-  #               ##puts "get inner children #{inner[:children][firstKey]}"
+  #               #puts "get inner children #{inner[:children][firstKey]}"
   #               if(inner[:children][firstKey].has_key?(:type))
                   
   #                 self.hasType = true
@@ -1432,7 +1833,7 @@ class WriteXML
   #                 if inner[:children][firstKey][:value].is_a?(Array)
   #                   #fast forward
   #                   #puts "Fast forwarding on array"
-  #                   #ex {:WallSystems=>{:required=>false, :value=>{:WallSystems=>{:children=>{:WallSystem=>{:required=>false, :type=>"WallSystemType", :value=>[] }}}}}}
+  #                   #ex {:WallSystems=>{:required=>false, value: {:WallSystems=>{:children=>{:WallSystem=>{:required=>false, :type=>"WallSystemType", value: [] }}}}}}
   #                   newelement = Element.new(k.to_s)
   #                   self.mostRecentElement.add_element(newelement)
   #                   self.mostRecentElement = newelement
@@ -1441,7 +1842,7 @@ class WriteXML
   #                   valarr.each do |val|
   #                     #make as much of it as you can here
   #                     if(self.hasType)
-  #                       ##puts self.typeSub
+  #                       #puts self.typeSub
   #                       newelement = Element.new(self.typeSub.to_s)
   #                       self.mostRecentElement.add_element(newelement)
   #                       self.mostRecentElement = newelement #temporarily
