@@ -1,20 +1,14 @@
 
 
-
-# $doc = REXML::Document.new
-
-# root = $doc.add_element 'Root'
-# most_recent_element = root
-# #puts $doc
-
-
-
-
 class SimpleElement
   attr_accessor :text, :children
 
   def text
     return @text
+  end
+
+  def attributes
+    return @attributes
   end
 
   def children
@@ -80,9 +74,9 @@ class SimpleElement
 
   def bulk_children(args)
     args.keys.each do |k|
-      #puts "Working on " + k.to_s
-      #puts @children
-      #puts args
+     #puts "Working on " + k.to_s
+     #puts @children
+     #puts args
       if(args[k][:value].is_a?(Array))
         #puts "Value is an array"
         args[k][:value].each do |c|
@@ -193,6 +187,63 @@ class ACAdjusted < EnumeratedElement
   end
 end
 
+class AirCooled < SimpleElement
+  def specify_children
+    @children = {}
+    @children[:EvaporativelyCooled] = { required: false, value: nil }
+    @children[:CondensingFanSpeedOperation] = { required: false, value: nil }
+    @children[:CondensingTemperature] = { required: false, value: nil }
+    @children[:SplitCondenser] = { required: false, value: nil }
+    @children[:DesignAmbientTemperature] = { required: false, value: nil }
+    @children[:DesignTemperatureDifference] = { required: false, value: nil }
+  end
+end
+
+class AnnualCoolingEfficiencyValue < SimpleElement; end
+class AnnualCoolingEfficiencyUnits < EnumeratedElement
+  def specify_enums
+    @enums = ["COP",
+        "EER",
+        "SEER",
+        "kW/ton",
+        "Other"]
+  end
+end
+
+class AirDeliveryType < EnumeratedElement
+  def specify_enums
+    @enums = ["Central fan",
+              "Induction units",
+              "Low pressure under floor",
+              "Local fan",
+              "Other",
+              "Unknown"]
+  end
+end
+
+class AirSideEconomizer < SimpleElement
+  def specify_children 
+    @children = {}
+    @children[:AirSideEconomizerType] = { required: false, value: nil }
+    @children[:EconomizerControl] = { required: false, value: nil }
+    @children[:EconomizerDryBulbControlPoint] = { required: false, value: nil }
+    @children[:EconomizerEnthalpyControlPoint] = { required: false, value: nil }
+    #TODO: Add More as required
+  end
+end
+
+class AirSideEconomizerType < EnumeratedElement
+  def specify_enums
+    @enums = ["Dry bulb temperature",
+              "Enthalpy",
+              "Demand controlled ventilation",
+              "Nonintegrated",
+              "Other",
+              "Unknown"]
+
+  end
+end
+
 class AspectRatio < SimpleElement;end
 
 
@@ -220,6 +271,55 @@ class Audit < SimpleElement
     @attributes = {"ID" => {value: nil} }
   end
 
+end
+
+class Boiler < SimpleElement
+  def specify_children
+    @children = {}
+    @children[:BoilerType] = { required:false, value: nil }
+    @children[:CondensingOperation] =  { required:false, value: nil }
+    @children[:OutputCapacity] = { required:false, value: nil }
+    @children[:ThermalEfficiency] = { required:false, value: nil }
+    @children[:CapacityUnits] =  { required:false, value: nil }
+    @children[:BoilerLWT] = { required:false, value: nil }
+    @children[:HotWaterResetControl] = { required:false, value: nil }   
+  end
+end
+
+class BoilerLWT < SimpleElement; end
+
+class BoilerType < EnumeratedElement
+  def specify_enums
+    @enums = [ "Steam", "Hot water", "Other", "Unknown"]
+  end
+end
+
+class CapacityUnits < EnumeratedElement
+  def specify_enums
+    @enums = ["cfh",
+        "ft3/min",
+        "kcf/h",
+        "MCF/day",
+        "gpm",
+        "W",
+        "kW",
+        "hp",
+        "MW",
+        "Btu/hr",
+        "cal/h",
+        "ft-lbf/h",
+        "ft-lbf/min",
+        "Btu/s",
+        "kBtu/hr",
+        "MMBtu/hr",
+        "therms/h",
+        "lbs/h",
+        "Klbs/h",
+        "Mlbs/h",
+        "Cooling ton",
+        "Other"
+    ]
+  end
 end
 
 class CeilingArea < SimpleElement; end
@@ -268,11 +368,80 @@ class CeilingSystemType < SimpleElement
 
   def specify_attributes
     @attributes = {}
-    @attributes[:ID] = { required:false, value: nil }
+    @attributes[:ID] = { required:false, text: nil }
   end
 end
 
+class CentralAirDistribution < SimpleElement
+  def specify_children
+    @children={}
+    @children[:AirDeliveryType] = { required: false, value: nil }
+  end
+end
+
+class CondenserPlantType < SimpleElement
+  def specify_children
+    @children = {}
+    @children[:AirCooled] = { required: false, value: nil }
+    @children[:WaterCooled] = { required: false, value: nil }
+    @children[:GroundSource] = { required: false, value: nil }
+    @children[:GlycolCooledDryCooler] = { required: false, value: nil }
+  end
+
+  def specify_attributes
+    @attributes = {}
+    @attributes[:ID] = { required:false, text: nil }
+  end
+end
+
+class CondensingOperation < SimpleElement; end
+
 class ConditionedVolume < SimpleElement; end
+
+class CoolingDeliveryID < SimpleElement
+  def specify_attributes
+    @attributes = {}
+    @attributes[:ID] = { required: false, value: nil }
+  end
+
+end
+
+class CoolingSource < SimpleElement
+  def specify_children
+    @children={}
+    @children[:CoolingSourceType] = { required: false, value: nil }
+    @children[:CoolingMedium] = { required: false, value: nil }
+    @children[:PrimaryFuel] = { required: false, type:"FuelType", value: nil }
+    @children[:AnualCoolingEfficiencyValue] = { required: false, value: nil }
+    @children[:AnnualCoolingEfficiencyUnits] = { required: false, value: nil }
+  end
+
+  def specify_attributes
+    @attributes={}
+    @attributes[:ID] = { required: false, value: nil }
+  end
+end
+
+class CoolingSourceType < SimpleElement
+  def specify_children
+    @children={}
+    @children[:CoolingPlantID] = { required: false, value: nil }
+    @children[:DX] = { required: false, value: nil }
+    #TODO: Add more as required
+  end
+end
+
+class CoolingMedium < EnumeratedElement
+  def specify_enums
+    @enums = ["Chilled water",
+              "Refrigerant",
+              "Air",
+              "Glycol",
+              "Other",
+              "Unknown"]
+  end
+end
+
 class DaylightingIlluminanceSetpoint < SimpleElement; end
 class DaylitFloorArea < SimpleElement; end
 
@@ -292,6 +461,34 @@ class DayType < EnumeratedElement
   end
 end
 
+class Delivery < SimpleElement
+  def specify_children
+    @children={}
+    @children[:DeliveryType] ={ required: false, value: nil }
+    @children[:HeatingSourceID] = { required: false, value: nil }
+    @children[:CoolingSourceID] = { required: false, value: nil }
+    @children[:Quantity] = { required: false, value: nil }
+  end
+  def specify_attributes
+    @attributes={}
+    @attributes[:ID] = { required: false, value: nil }
+  end
+end
+
+class DeliveryType < SimpleElement
+  def specify_children
+    @children= {}
+    @children[:FanBased] = { required: false, value: nil }
+    #TODO: Add more as required
+  end
+end
+
+
+class ReheatPlantID < IDOnlyElement; end
+
+class HeatingSourceID < IDOnlyElement; end
+class CoolingSourceID < IDOnlyElement; end
+
 class DoorID < SimpleElement 
   def specify_children
     @children = {}
@@ -305,6 +502,41 @@ class DoorID < SimpleElement
 end
 
 class DeliveryID < IDOnlyElement; end
+
+class DuctSystems < SimpleElement
+  def specify_children
+    @children = {}
+    @children[:DuctSystem] = { required: false, type:"DuctSystemType", value:[] } #TODO: this is DuctSystems in the XSD, is that correct?
+  end
+end
+
+class DuctSystemType < SimpleElement
+  def specify_children
+    @children = {}
+    @children[:Quantity] = { required: false, value: nil }
+    @children[:HeatingDeliveryID] = { required: false, value: nil }
+    @children[:CoolingDeliveryID] = { required: false, value: nil }
+    @children[:Location] = { required: false, value: nil }
+    @children[:LinkedPremises] = { required: false, value: nil }
+  end
+
+  def specify_attributes
+    @attributes = {}
+    @attributes[:ID] = { required: false, text: nil}
+  end
+end
+
+class EconomizerControl < EnumeratedElement
+  def specify_enums
+    @enums = ["Fixed",
+              "Differential",
+              "Other",
+              "Unknown"]
+  end
+end
+
+class EconomizerDryBulbControlPoint < SimpleElement; end
+class EconomizerEnthalpyControlPoint < SimpleElement; end
 
 class Facilities < SimpleElement
   #initialize the Facility Children with a simple type or array
@@ -365,6 +597,22 @@ class FacilityType < SimpleElement
 
 end
 
+class FanBased < SimpleElement
+  def specify_children
+    @children = {}
+    @children[:FanBasedDistributionType] = { required: false, value: nil }
+    @children[:AirSideEconomizer] = { required: false, value: nil }
+  end
+end
+
+class FanBasedDistributionType < SimpleElement
+  def specify_children
+    @children = {}
+    @children[:CentralAirDistribution] = { required: false, value: nil }
+    #TODO: Add more as required
+  end
+end
+
 class FenestrationArea < SimpleElement; end
 
 class FenestrationSystems < SimpleElement
@@ -399,8 +647,8 @@ class FenestrationSystemType < SimpleElement
 
   def specify_attributes
     @attributes = {}
-    @attributes[:ID] = { required:false, value: nil }
-    @attributes[:Status] = { required:false, value: nil }
+    @attributes[:ID] = { required:false, text: nil }
+    @attributes[:Status] = { required:false, text: nil }
   end
 end
 
@@ -509,14 +757,137 @@ class FoundationSystemType < SimpleElement
 
   def specify_attributes
     @attributes = {}
-    @attributes[:ID] = { required:false, value: nil }
-    @attributes[:Status] = { required:false, value: nil }
+    @attributes[:ID] = { required:false, text: nil }
+    @attributes[:Status] = { required:false, text: nil }
+  end
+end
+
+class FuelTypes < EnumeratedElement
+  def specify_enums
+    @enums = ["Electricity",
+      "Natural gas",
+      "Fuel oil",
+      "Fuel oil no 1",
+      "Fuel oil no 2",
+      "Fuel oil no 4",
+      "Fuel oil no 5 and no 6",
+      "District steam",
+      "District hot water",
+      "District chilled water",
+      "Propane",
+      "Liquid propane",
+      "Kerosene",
+      "Diesel",
+      "Coal",
+      "Coal anthracite",
+      "Coal bituminous",
+      "Coke",
+      "Wood",
+      "Wood pellets",
+      "Hydropower",
+      "Biofuel",
+      "Wind",
+      "Geothermal",
+      "Solar",
+      "Biomass",
+      "Hydrothermal",
+      "Dry steam",
+      "Flash steam",
+      "Ethanol",
+      "Biodiesel",
+      "Waste heat",
+      "Other",
+      "Unknown"]
   end
 end
 
 class HeatLowered < SimpleElement; end
 
+class HeatingAndCoolingSystems < SimpleElement
+  def specify_children
+    @children={}
+    @children[:ZoningSystemType] = { required: false, value: nil}
+    @children[:HeatingSource] = { required: false, value: [] }
+    @children[:CoolingSource] = { required: false, value: [] }
+    @children[:Delivery] = { required: false, value: nil}
+    #TODO: add more as necessary
+  end
+end
+
+class HeatingSource < SimpleElement
+  def specify_children
+    @children={}
+    @children[:SourceHeatingPlantID] = { required: false, value: nil}
+    @children[:HeatingMedium] = { required: false, value: nil}
+    @children[:PrimaryFuel] = { required: false, type:"FuelType", value: nil}
+    @children[:Quantity] = { required: false, value: nil}
+    #TODO: Add others as necessary
+  end
+end
+
+class HeatingMedium < EnumeratedElement
+  def specify_enums
+    @enums = ["Hot water",
+              "Steam",
+              "Refrigerant",
+              "Air",
+              "Glycol",
+              "Other",
+              "Unknown"]
+  end
+end
+
+class HeatingDeliveryID < IDOnlyElement; end
+
+class HeatingPlantType < SimpleElement 
+  def specify_children
+    @children = {}
+    @children[:Boiler] = { required: false, value:nil }
+    #TODO, add more children elements as required
+  end
+
+  def specify_attributes
+    @attributes = {}
+    @attributes[:ID] = { required: false, text: nil}
+  end
+end
+
+class HotWaterResetControl < EnumeratedElement
+  def specify_enums
+    @enums = ["During the day",
+              "At night",
+              "During sleeping and unoccupied hours",
+              "Seasonal",
+              "Never-rarely",
+              "Other",
+              "Unknown"
+    ]
+  end
+end
+
 class HVACScheduleID < IDOnlyElement; end
+
+class HVACSystems < SimpleElement
+  def specify_children
+    @children = {}
+    @children[:HVACSystem] = { required: false, type:"HVACSystemType", value: [] }
+  end
+end
+
+class HVACSystemType < SimpleElement
+  def specify_children
+    @children = {}
+    @children[:Plants] = { required: false, value: nil }
+    @children[:HeatingAndCoolingSystems] = { required: false, value: nil }
+    @children[:DuctSystems] = { required: false, value:nil }
+    @children[:OtherHVACSystems] = { required: false, value: nil }
+    #TODO: Add other children as needed
+  end
+  def specify_attributes
+    @attributes = {}
+    @attributes[:ID] = { require: false, text: nil } 
+  end
+end
 
 class InstalledPower < SimpleElement; end
 
@@ -548,21 +919,19 @@ class LinkedSpaceID < SimpleElement
   end
   def specify_attributes
     @attributes = {}
-    @attributes[:IDref] = { required: true, value: nil }
+    @attributes[:IDref] = { required: true, text: nil }
   end
 end
 
-class LinkedScheduleID < SimpleElement 
-  def specify_attributes
-    @attributes = {}
-    @attributes[:IDref] = { required: true, value: nil }
-  end
-end
+class LinkedScheduleID < IDOnlyElement; end
+
+class LinkedThermalZoneID < IDOnlyElement; end
 
 class LinkedPremises < SimpleElement
   def specify_children
     @children = {}
     @children[:Space] = { required: false, value: nil }
+    @children[:ThermalZone] = { required: false, value: nil }
     #TODO - add more fields as required
   end
 end
@@ -582,6 +951,9 @@ end
 
 class Longitude < SimpleElement; end
 class Latitude < SimpleElement; end
+
+
+
 
 # class Side < SimpleElement
 #     attr_accessor :SideNumber, :SideLength, :WallID, :WindowID, :DoorID, :ThermalZoneID
@@ -827,6 +1199,8 @@ class OccupantsActivityLevel < EnumeratedElement
   end
 end
 
+class OutputCapacity < SimpleElement; end
+
 class PercentageOfCommonSpace < SimpleElement; end
 
 class PercentOfWindowAreaShaded < SimpleElement; end
@@ -875,6 +1249,52 @@ class PerimeterZoneDepth < SimpleElement; end
 class PremisesName < SimpleElement; end
 class PremisesNotes < SimpleElement; end
 class PremisesIdentifiers < SimpleElement; end
+
+class Plants < SimpleElement
+  def specify_children
+    @children = {}
+    @children[:HeatingPlantType] = { required: false, value:[] }
+    @children[:CoolingPlantType] = { required: false, value:[] }
+    @children[:CondenserPlant] = { required: false, type:"CondenserPlantType", value:[] }
+  end
+
+end
+
+class PlugLoad < SimpleElement #should this be plugloadtype
+  def specify_children
+    @children = {}
+    @children[:PlugLoadType] = { required:false, value: nil }
+    @children[:PlugLoadNominalPower] = { required: false, value: nil }
+    @children[:LinkedPremises] = { required: false, value: nil }
+    @children[:Location] = { required: false, value: nil}
+  end
+end
+
+class PlugLoadNominalPower < SimpleElement; end
+
+class PlugLoads < SimpleElement
+  def specify_children
+    @children = {}
+    @children[:PlugLoad] = { required: false, value:[]} #TODO why is plugloadtype defined twice?
+  end
+end
+
+class PlugLoadType < EnumeratedElement
+  def specify_enums
+    @enums = ["Personal Computer",
+              "Task Lighting",
+              "Printing",
+              "Cash Register",
+              "Audio",
+              "Display",
+              "Set Top Box",
+              "Business Equipment",
+              "Other",
+              "Unknown"]
+  end
+end
+
+class Quantity < SimpleElement; end
 
 class RoofID < SimpleElement
   def specify_children 
@@ -932,7 +1352,7 @@ class RoofSystemType < SimpleElement
 
   def specify_attributes
     @attributes = {}
-    @attributes[:ID] = { required:false,value: nil }
+    @attributes[:ID] = { required:false, text: nil }
   end
 end
 
@@ -1086,6 +1506,13 @@ class SiteType < SimpleElement
   end
 end
 
+class SourceHeatingPlantID < SimpleElement
+  def specify_attributes
+    @attributes = {}
+    @attributs[:ID] = { required: false, value: nil }
+  end
+end
+
 #a special category for LinkedPremises
 class Space < SimpleElement
   def specify_children
@@ -1198,6 +1625,15 @@ class Systems < SimpleElement
     @children[:FenestrationSystems] = { required:false, value: nil }
     @children[:FoundationSystems] = { required:false, value: nil }
     @children[:PlugLoads] = { required:false, value: nil }
+  end
+end
+
+class ThermalEfficiency < SimpleElement; end
+
+class ThermalZone < SimpleElement
+  def specify_children
+    @children = {}
+    @children[:LinkedThermalZoneID] = { required: false, value: [] }
   end
 end
 
@@ -1320,6 +1756,13 @@ class YearOfConstruction < SimpleElement; end
 
 class ZOffset < SimpleElement; end
 
+class ZoningSystemType < EnumeratedElement
+  def specify_enums
+    @enums = ["Single zone",
+              "Multi zone",
+              "Unknown"]
+  end
+end
 
 
 # class SiteType
