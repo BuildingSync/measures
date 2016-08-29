@@ -91,7 +91,9 @@ class SimpleElement
             type_match = true
             args[k][:value].each do |a|
               if(@children[k].has_key? :type)
+                puts "Has key type"
                 if(a.class.name != @children[k][:type])
+                  puts "Type mismatch #{a.class.name} and #{@children[k][:type]}"
                   type_match = false
                   break
                 end
@@ -379,6 +381,19 @@ class CentralAirDistribution < SimpleElement
   end
 end
 
+class CompressorStaging < EnumeratedElement
+  def specify_enums
+    @enums = ["Single stage",
+        "Multiple discrete stages",
+        "Variable",
+        "Modulating",
+        "Other",
+        "Unknown"]
+  end
+end
+
+class CondenserPlantID < IDOnlyElement; end
+
 class CondenserPlantType < SimpleElement
   def specify_children
     @children = {}
@@ -411,8 +426,8 @@ class CoolingSource < SimpleElement
     @children={}
     @children[:CoolingSourceType] = { required: false, value: nil }
     @children[:CoolingMedium] = { required: false, value: nil }
-    @children[:PrimaryFuel] = { required: false, type:"FuelType", value: nil }
-    @children[:AnualCoolingEfficiencyValue] = { required: false, value: nil }
+    @children[:PrimaryFuel] = { required: false, type:"FuelTypes", value: nil }
+    @children[:AnnualCoolingEfficiencyValue] = { required: false, value: nil }
     @children[:AnnualCoolingEfficiencyUnits] = { required: false, value: nil }
   end
 
@@ -523,6 +538,31 @@ class DuctSystemType < SimpleElement
   def specify_attributes
     @attributes = {}
     @attributes[:ID] = { required: false, text: nil}
+  end
+end
+
+class DX < SimpleElement 
+  def specify_children
+    @children = {}
+    @children[:DXSystemType] = { required: false, value: nil }
+    @children[:CompressorStaging] = { required: false, value: nil }
+    @children[:CondenserPlantID] = { required: false, value: nil }
+  end
+end
+
+class DXSystemType < EnumeratedElement
+  def specify_enums
+    @enums = ["Split DX air conditioner",
+              "Packaged terminal air conditioner (PTAC)",
+              "Split heat pump",
+              "Packaged terminal heat pump (PTHP)",
+              "Variable refrigerant flow",
+              "Packaged/unitary direct expansion/RTU",
+              "Packaged/unitary heat pump",
+              "Single package vertical air conditioner",
+              "Single package vertical heat pump",
+              "Other",
+              "Unknown"]
   end
 end
 
@@ -801,6 +841,15 @@ class FuelTypes < EnumeratedElement
   end
 end
 
+class Furnace < SimpleElement
+  def specify_children
+    @children = {}
+  end
+  def specify_attributes 
+    @children = {}
+  end
+end
+
 class HeatLowered < SimpleElement; end
 
 class HeatingAndCoolingSystems < SimpleElement
@@ -817,11 +866,20 @@ end
 class HeatingSource < SimpleElement
   def specify_children
     @children={}
-    @children[:SourceHeatingPlantID] = { required: false, value: nil}
+    @children[:HeatingSourceType] = { required: false, value: nil }
     @children[:HeatingMedium] = { required: false, value: nil}
-    @children[:PrimaryFuel] = { required: false, type:"FuelType", value: nil}
+    @children[:PrimaryFuel] = { required: false, type:"FuelTypes", value: nil}
     @children[:Quantity] = { required: false, value: nil}
     #TODO: Add others as necessary
+  end
+end
+
+class HeatingSourceType < SimpleElement
+  def specify_children
+    @children = {}
+    @children[:SourceHeatingPlantID] = { required: false, value: nil}
+    @children[:Furnace] = { required: false, value: nil }
+    #TODO: Add more as needed
   end
 end
 
@@ -951,34 +1009,6 @@ end
 
 class Longitude < SimpleElement; end
 class Latitude < SimpleElement; end
-
-
-
-
-# class Side < SimpleElement
-#     attr_accessor :SideNumber, :SideLength, :WallID, :WindowID, :DoorID, :ThermalZoneID
-
-#     def initialize(args)
-
-#     end
-
-#     def add(obj)
-#         case 
-#         when obj.class.name === "SideNumber"
-#             self.SideNumber = obj
-#         when obj.class.name === "SideLength"
-#             self.SideLength = obj
-#         when obj.class.name === "WallID"
-#             self.WallID = obj
-#         when obj.class.name === "WindowID"
-#             self.WindowID = obj
-#         when obj.class.name === "DoorID"
-#             self.DoorID = obj
-#         when obj.class.name === "ThermalZoneID"
-#         end
-#     end
-
-# end
 
 class SlabArea < SimpleElement; end
 
@@ -1206,46 +1236,7 @@ class PercentageOfCommonSpace < SimpleElement; end
 class PercentOfWindowAreaShaded < SimpleElement; end
 
 class PerimeterZoneDepth < SimpleElement; end
-# class Ownership < SimpleElement
-#     attr_accessor :enums
-#     def initialize(args)
-#         @enums = ["Property management company",
-#         "Corporation/partnership/LLC",
-#         "Religious organization",
-#         "Individual",
-#         "Franchise",
-#         "Other non-government",
-#         "Government",
-#         "Federal government",
-#         "State government",
-#         "Local government",
-#         "Other",
-#         "Unknown"]
-#         if(@enums.include? args[:text])
-#             @text = args[:text]
-#         else
-#             #puts "Throw an error Ownership enums."
-#         end
-#     end
-# end
-# class OwnershipStatus < SimpleElement
-#     attr_accessor :enums
-#     def initialize(args)
-#         @attributes = []
-#         @enums = ["Owned",
-#                     "Mortgaged",
-#                     "Leased",
-#                     "Rented",
-#                     "Occupied without payment of rent",
-#                     "Other",
-#                     "Unknown"]
-#         if(@enums.include? args[:text])
-#             @text = args[:text]
-#         else
-#             #puts "Throw an error weather station category."
-#         end
-#     end
-# end
+
 class PremisesName < SimpleElement; end
 class PremisesNotes < SimpleElement; end
 class PremisesIdentifiers < SimpleElement; end
@@ -1314,12 +1305,6 @@ end
 class RoofArea < SimpleElement; end
 class RoofInsulatedArea < SimpleElement; end
 
-# class PrimaryContactID < SimpleElement
-#     def initialize(args)
-#         @attributes = { :ID => args[id] }
-#         @required = true
-#     end
-# end
 
 class RoofSystems < SimpleElement
   def specify_children
@@ -1407,25 +1392,6 @@ class SkylightID < SimpleElement;
 end
 
 class Story < SimpleElement; end
-# class WeatherDataStationID < SimpleElement; end
-# class WeatherStationName < SimpleElement; end
-# class WeatherStationCategory < SimpleElement
-#     attr_accessor :enums
-#     def initialize(args)
-#         @attributes = []
-#         @enums = ["FAA",
-#                     "ICAO",
-#                     "NWS",
-#                     "WBAN",
-#                     "WMO",
-#                     "Other"]
-#         if(@enums.include? args[:text])
-#             @text = args[:text]
-#         else
-#             #puts "Throw an error weather station category."
-#         end
-#     end
-# end
 
 class SetpointTemperatureHeating < SimpleElement; end
 class SetbackTemperatureHeating < SimpleElement; end
@@ -1509,7 +1475,7 @@ end
 class SourceHeatingPlantID < SimpleElement
   def specify_attributes
     @attributes = {}
-    @attributs[:ID] = { required: false, value: nil }
+    @attributes[:ID] = { required: false, value: nil }
   end
 end
 
@@ -1765,95 +1731,3 @@ class ZoningSystemType < EnumeratedElement
 end
 
 
-# class SiteType
-#     attr_accessor :attributes, :type, :name, :PremisesName, :PremisesIdentifiers, :PremisesNotes,:OccupancyClassification, :WeatherDataStationID, :WeatherStationName, :WeatherStationCategory
-#     attr_accessor :Latitude, :Longitude, :OwnershipStatus, :Ownership, :PrimaryContactID
-#     def initialize(args)
-#        @name = args[:displayName]
-#        @attributes = { :ID => args[:ID] }
-#     end
-#     def add(obj)
-#         #puts obj.class
-#         case 
-#         when obj.class.name === "PremisesName"
-#             #puts "Site Type Adding", obj
-#             self.PremisesName = obj
-#         when obj.class.name === "OccupancyClassification"
-#             self.OccupancyClassification = obj
-#         when obj.class.name === "WeatherDataStationID"
-#             self.WeatherDataStationID = obj
-#         when obj.class.name === "WeatherStationName"
-#             self.WeatherStationName = obj
-#         when obj.class.name === "WeatherStationCategory"
-#             self.WeatherStationCategory = obj
-#         when obj.class.name === "PremisesIdentifiers"
-#             self.PremisesIdentifiers = obj
-#         when obj.class.name === "PremisesNotes"
-#             self.PremisesNotes = obj
-#         when obj.class.name === "Latitude"
-#             self.Latitude = obj
-#         when obj.class.name === "Longitude"
-#             self.Longitude === obj
-#         when obj.class.name = "Ownership"
-#             self.Ownership === obj
-#         when obj.class.name = "PrimaryContactID"
-#             self.PrimaryContactID === obj
-#         else
-#             #puts "Throw and error making site."
-#         end
-#     end
-# end
-
-# def writeOut(args)
-#     #puts "starting writeOut", args
-#     #$doc = args[:doc]
-#     current_class = args[:class]
-#     current_el = args[:currentEl]
-#     if(current_class.kind_of?(Array))
-#         if(current_class.respond_to?("attributes"))
-#             #puts "this is an attribute array."
-#         else
-#             #current_el.add_element(current_class.class.name)
-#             current_class.each do |a|
-#                 #puts "Recurse on array..."
-#                 writeOut({ :class => a, :currentEl => current_el })
-#             end
-#         end
-#     end    
-#     current_class.instance_variables.each do |v|
-#         #puts "Class Instance Variable",  v.to_s
-#         #puts "The instance itself: ", current_class.instance_eval(v.to_s)
-#         #puts v.to_s[1..-1]
-        
-#         if(current_class.instance_eval(v.to_s).respond_to?("attributes"))
-#             if(current_class.instance_eval(v.to_s).attributes.empty?)
-#                 #puts "No attributes"
-#                 #puts "Found old fashioned way"
-#                 #puts "Writing element " + v.to_s[1..-1]
-#                 c = current_el.add_element v.to_s[1..-1]
-#                 writeOut({ :class => current_class.instance_eval(v.to_s), :currentEl => c })
-#             else
-#                 #puts "attributes" + current_class.instance_eval(v.to_s)
-#                 current_el["ID"]=current_class.instance_eval(v.to_s).attributes[0]
-#             end
-#         elsif(current_class.instance_eval(v.to_s).respond_to?("@text")) #a simple element
-#             #puts "Has text element"
-#             current_el.text =  current_class.instance_eval(v.to_s).text
-#         elsif(v.to_s === "type")
-#             #do nothing, continue looping
-#             #puts "Reached type, ignoring."
-#             next
-#         else
-#             #more complex than I thought
-#             #puts "Recurse..."
-#             #puts "Writing element " + v.to_s[1..-1]
-#             c = current_el.add_element v.to_s[1..-1]
-#             writeOut({ :class => current_class.instance_eval(v.to_s), :currentEl => c })
-#         end
-#     end
-# end
-
-
-
-#$doc.write($stdout)
-#$doc.write(File.open("/Users/chienharriman/BuildingSync/som.xml","w"), 2)
