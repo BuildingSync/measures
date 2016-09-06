@@ -283,75 +283,160 @@ class FloorAreasHelper
   end
 end
 
+class DeliveryHelper
+  attr_accessor :delivery
+
+  #passes in a little hash that is unwrapped to make the delivery object
+  def initialize(in_hash, handle)
+    begin
+      #puts in_hash.keys[0]
+      if(in_hash.keys[0] == :FanBased)
+
+        h = {}
+        children = {}
+        attributes = {}
+        h[:children] = children
+        h[:attributes] = attributes
+        children[:AirDeliveryType] = { value: AirDeliveryType.new({ text: in_hash[:FanBased][:CentralAirDistribution][:AirDeliveryType] }) }
+        children[:TerminalUnit] = { value: TerminalUnit.new({ text: in_hash[:FanBased][:CentralAirDistribution][:TerminalUnit] }) }
+        #if the TerminalUnit is not VAV with reheat, don't provide these two
+        if in_hash[:FanBased][:CentralAirDistribution][:TerminalUnit] == "Uncontrolled register"
+          #do nothing
+        elsif in_hash[:FanBased][:CentralAirDistribution][:TerminalUnit] == "VAV terminal box not fan powered with reheat"
+          children[:ReheatSource] = { value: ReheatSource.new({ text: in_hash[:FanBased][:CentralAirDistribution][:ReheatSource]})}
+          children[:ReheatPlantID] = { value: ReheatPlantID.new({ text: in_hash[:FanBased][:CentralAirDistribution][:ReheatPlantID]}) }
+        else
+          raise "Unanticipated terminal unit type."
+        end
+        cad = CentralAirDistribution.new(h)
+        h = {}
+        children = {}
+        attributes = {}
+        h[:children] = children
+        h[:attributes] = attributes
+        children[:CentralAirDistribution] = { value: cad }
+        fbdt = FanBasedDistributionType.new(h)
+
+        h = {}
+        children = {}
+        attributes = {}
+        h[:children] = children
+        h[:attributes] = attributes
+        children[:FanBasedDistributionType] = { value: fbdt }
+        fb = FanBased.new(h)
+
+        h = {}
+        children = {}
+        attributes = {}
+        h[:children] = children
+        h[:attributes] = attributes
+        children[:FanBased] = { value: fb }
+        dt = DeliveryType.new(h)
+
+        h = {}
+        children = {}
+        attributes = {}
+        h[:children] = children
+        h[:attributes] = attributes
+        children[:DeliveryType] = { value: dt }
+        attributes[:ID] = { value: "Delivery_"+handle }
+        @delivery = Delivery.new(h)  
+        return
+      else
+        #TODO: add more delivery methods for the helper
+        raise "Unanticipated or new delivery method encountered that has yet to be added to the version."
+      end
+    rescue => error
+      puts "Could not create the delivery element properly"
+      puts error.inspect, error.backtrace
+    ensure
+      #do nothing for now
+    end
+  end
+end
+
 class DuctSystemsHelper
   attr_accessor :duct_systems
 
   def initialize(air_loops)
     #make *each* DuctSystemType
+    #puts air_loops
     duct_systems_arr = []
-    air_loops.each_with_index do |air_loop, index|
-      h = {}
-      children = {}
-      attributes = {}
-      h[:children] = children
-      h[:attributes] = attributes
-
-      delh = {}
-      delattributes = {}
-      delh[:attributes] = delattributes
-      delattributes[:ID] = { value: "DeliveryPod-"+index.to_s }
-     #puts delh
-      children[:HeatingDeliveryID] = { value: HeatingDeliveryID.new(delh) }
-      children[:CoolingDeliveryID] = { value: CoolingDeliveryID.new(delh) }
-      children[:Quantity] = { value: Quantity.new({ text: 1 }) }
-      children[:Location] = { value: Location.new({ text: "Interior" }) } #TODO, how to NOT hardcode this?
-
-      #puts h
-      #create linked premises
-      #at a minimum, we want the space object which contains a linked space id and a set of schedules
-      #work inside out, schedules, space id, and then linked premises
-      ltzid = []
-      air_loop.thermalZones.each do |tzone|
-        lsh = {}
-        lchildren = {}
-        lattributes = {}
-        lsh[:children] = lchildren
-        lsh[:attributes] = lattributes
-        lattributes[:IDref] = { value: tzone.handle.to_s }
-        lsid = LinkedThermalZoneID.new(lsh)
-       #puts lsid
-        ltzid.push(lsid)
-      end
-      sh = {}
-      schildren = {}
-      sattributes = {}
-      sh[:children] = schildren
-      sh[:attributes] = sattributes
-      schildren[:LinkedThermalZoneID] = { value: ltzid }
-     #puts sh
-      sp = ThermalZone.new(sh)
-
-      lph = {}
-      lphchildren = {}
-      lphattributes = {}
-      lph[:children] = lphchildren
-      lph[:attributes] = lphattributes
-      lphchildren[:ThermalZone] = { value: sp } #space is child of LinkedPremises
-      lp = LinkedPremises.new(lph)
-
-      children[:LinkedPremises] = { value: lp }
-      ds = DuctSystemType.new(h)
-      duct_systems_arr.push(ds)
-    end
     h = {}
     children = {}
     attributes = {}
     h[:children] = children
     h[:attributes] = attributes
-    #hash alread defined globally at the top of initialize
-    children[:DuctSystem] = { value: duct_systems_arr }
-    @duct_systems = DuctSystems.new(h)
-   #puts "Duct systems #{@duct_systems}"
+    begin
+      air_loops.each_with_index do |air_loop, index|
+        
+        delh = {}
+        delattributes = {}
+        delh[:attributes] = delattributes
+        delattributes[:ID] = { value: "Delivery_"+air_loop.handle.to_s }
+       #puts delh
+        children[:HeatingDeliveryID] = { value: HeatingDeliveryID.new(delh) }
+        children[:CoolingDeliveryID] = { value: CoolingDeliveryID.new(delh) }
+        children[:Quantity] = { value: Quantity.new({ text: 1 }) }
+        children[:Location] = { value: Location.new({ text: "Interior" }) } #TODO, how to NOT hardcode this?
+
+        puts delh
+        #create linked premises
+        #at a minimum, we want the space object which contains a linked space id and a set of schedules
+        #work inside out, schedules, space id, and then linked premises
+        ltzid = []
+        air_loop.thermalZones.each do |tzone|
+          lsh = {}
+          lchildren = {}
+          lattributes = {}
+          lsh[:children] = lchildren
+          lsh[:attributes] = lattributes
+          lattributes[:IDref] = { value: tzone.handle.to_s }
+          lsid = LinkedThermalZoneID.new(lsh)
+          #puts lsid
+          ltzid.push(lsid)
+        end
+        sh = {}
+        schildren = {}
+        sattributes = {}
+        sh[:children] = schildren
+        sh[:attributes] = sattributes
+        schildren[:LinkedThermalZoneID] = { value: ltzid }
+        #puts sh
+        sp = ThermalZone.new(sh)
+
+        lph = {}
+        lphchildren = {}
+        lphattributes = {}
+        lph[:children] = lphchildren
+        lph[:attributes] = lphattributes
+        lphchildren[:ThermalZone] = { value: sp } #space is child of LinkedPremises
+        lp = LinkedPremises.new(lph)
+
+        children[:LinkedPremises] = { value: lp }
+        ds = DuctSystemType.new(h)
+        duct_systems_arr.push(ds)
+      end
+      # h = {}
+      # children = {}
+      # attributes = {}
+      # h[:children] = children
+      # h[:attributes] = attributes
+      # #hash alread defined globally at the top of initialize
+      # children[:DuctSystem] = { value: duct_systems_arr }
+      # @duct_systems = DuctSystems.new(h)
+      puts "Successfully created Duct systems"
+      puts duct_systems_arr[0].children
+
+    rescue => error
+      puts "Could not create the DuctSystems element properly"
+      puts error.inspect, error.backtrace
+    ensure
+      children[:DuctSystem] = { type:"DuctSystemType" , value: duct_systems_arr }
+      #puts h.inspect
+      @duct_systems = DuctSystems.new(h)
+      #puts @ductsystems
+    end
   end
 
 
@@ -363,186 +448,260 @@ class HVACSystemsHelper
 
     @unique_hvac_systems = []
     @air_loops = []
-    
-
-    bldg = model.getBuilding
-    tzones = bldg.thermalZones()
-    tzones.each do |tzone|
-      if not tzone.airLoopHVACTerminal.empty? 
-        zoneTerm = tzone.airLoopHVACTerminal.get
-       #puts "Terminal #{zoneTerm}"
-       #puts "Containing ZoneHVAC #{zoneTerm.containingZoneHVACComponent}"
-        if not zoneTerm.airLoopHVAC.empty?
-          hvac_system = {}
-
-          airLoop = zoneTerm.airLoopHVAC.get
-          hvac_system[:airloop] = [airLoop.handle.to_s]
-          hwcoils = airLoop.supplyComponents(OpenStudio::Model::CoilHeatingWater::iddObjectType())
-          if not hwcoils.empty?
-            hwplant = hwcoils.first.to_CoilHeatingWater.get.plantLoop().get()
-            hvac_system[:hwPlant] = hwplant.handle.to_s
-          else
-            hvac_system[:hwPlant] = nil
-          end
-          cwcoils = airLoop.supplyComponents(OpenStudio::Model::CoilCoolingWater::iddObjectType())
-          if not cwcoils.empty?
-            chwplant = cwcoils.first.to_CoilCoolingWater.get.plantLoop().get()
-            hvac_system[:chwPlant] = chwplant.handle.to_s
-          else
-            hvac_system[:chwPlant] = nil
-          end
-
-          #now process the little hvac_system just created
-          if(@unique_hvac_systems.length == 0)
-            @unique_hvac_systems.push(hvac_system)
-            #puts "Added hvac_system to unique #{hvac_system}"
-            @air_loops.push(airLoop)
-          else
-            foundmatch = false
-            @unique_hvac_systems.each do |unique|
-              #puts "Comparing unique #{unique} to current def #{hvac_system}"
-              #puts unique[:chwPlant] == hvac_system[:chwPlant]
-              if(unique.size == hvac_system.size and (unique.keys - hvac_system.keys).empty?)
-                if unique[:hwPlant] == hvac_system[:hwPlant] and unique[:chwPlant] == hvac_system[:chwPlant]
-                  #puts "Hot water and chilled water plants match"
-                  if unique[:airloop].include? hvac_system[:airloop][0]
-                    foundmatch = true
-                    #puts "Found match for #{hvac_system}" #do nothing
-                  else
-                    #puts "Adding air loop #{airLoop.handle.to_s} to unique #{unique}"
-                    unique[:airloop].push(airLoop.handle.to_s)
-                    @air_loops.push(airLoop)
-                    foundmatch = true
+    duct_system = nil
+    begin
+      bldg = model.getBuilding
+      tzones = bldg.thermalZones()
+      tzones.each do |tzone|
+        @delivery_type = {}
+        if not tzone.airLoopHVACTerminal.empty? 
+          zoneTerm = tzone.airLoopHVACTerminal.get
+          #puts zoneTerm
+          if(zoneTerm.to_AirTerminalSingleDuctVAVReheat.is_initialized)
+            #puts "VAV"
+            @delivery_type[:FanBased] = {}
+            @delivery_type[:FanBased][:CentralAirDistribution] = {}
+            @delivery_type[:FanBased][:CentralAirDistribution][:AirDeliveryType] = "Central fan"
+            @delivery_type[:FanBased][:CentralAirDistribution][:TerminalUnit] = "VAV terminal box not fan powered with reheat"
+            if not zoneTerm.children.empty?
+              zoneTerm.children.each do |childs|
+                if childs.to_CoilHeatingWater.is_initialized
+                  coil = childs.to_CoilHeatingWater
+                  #puts "Reheat coil #{coil.get}"
+                  if not coil.get.plantLoop.empty?
+                    plant = coil.get.plantLoop.get
+                    #puts "Reheat Coil plant: #{plant}"
+                    boilers = plant.supplyComponents(OpenStudio::Model::BoilerHotWater::iddObjectType())
+                    if boilers.length == 1
+                      @delivery_type[:FanBased][:CentralAirDistribution][:ReheatSource] = "Heating plant"
+                      @delivery_type[:FanBased][:CentralAirDistribution][:ReheatPlantID] = boilers[0].handle.to_s
+                    else
+                      raise "Unexpected situation: more than one boiler."
+                    end
                   end
+                else
+                  raise "Unexpected reheat coil type."
                 end
-              else
-                #do nothing
-               #puts "This would be weird."  #TODO throw something here.
               end
             end
-            if not foundmatch
-             #puts "No match."
-              @unique_hvac_systems.push(hvac_system)
-              @air_loops.push(airLoop)
+          elsif zoneTerm.to_AirTerminalSingleDuctUncontrolled.is_initialized
+            #puts "Single duct uncontrolled"
+            @delivery_type[:FanBased] = {}
+            @delivery_type[:FanBased][:CentralAirDistribution] = {}
+            @delivery_type[:FanBased][:CentralAirDistribution][:AirDeliveryType] = "Central fan"
+            @delivery_type[:FanBased][:CentralAirDistribution][:TerminalUnit] = "Uncontrolled register"
+            if not zoneTerm.children.empty?
+              zoneTerm.children.each do |childs|
+                if childs.to_CoilHeatingWater.is_initialized
+                  raise "Unexpected situation where uncontrolled single duct has reheat coils."
+                end
+              end
             end
+          else
+            puts zoneTerm
+            raise "Unanticipated or new hvac delivery type."
           end
           
+          
+
+          if not zoneTerm.airLoopHVAC.empty?
+            hvac_system = {}
+            hvac_system[:delivery_type] = @delivery_type
+            airLoop = zoneTerm.airLoopHVAC.get
+
+            hvac_system[:airloop] = [airLoop.handle.to_s]
+            hwcoils = airLoop.supplyComponents(OpenStudio::Model::CoilHeatingWater::iddObjectType())
+            if not hwcoils.empty?
+              hwplant = hwcoils.first.to_CoilHeatingWater.get.plantLoop().get()
+              hvac_system[:hwPlant] = hwplant.handle.to_s
+            else
+              hvac_system[:hwPlant] = nil
+            end
+            cwcoils = airLoop.supplyComponents(OpenStudio::Model::CoilCoolingWater::iddObjectType())
+            if not cwcoils.empty?
+              chwplant = cwcoils.first.to_CoilCoolingWater.get.plantLoop().get()
+              hvac_system[:chwPlant] = chwplant.handle.to_s
+            else
+              hvac_system[:chwPlant] = nil
+            end
+
+            #now process the little hvac_system just created
+            if(@unique_hvac_systems.length == 0)
+              @unique_hvac_systems.push(hvac_system)
+              #puts "Added hvac_system to unique #{hvac_system}"
+              @air_loops.push(airLoop)
+            else
+              foundmatch = false
+              @unique_hvac_systems.each do |unique|
+                #puts "Comparing unique #{unique} to current def #{hvac_system}"
+                #puts unique[:chwPlant] == hvac_system[:chwPlant]
+                if(unique.size == hvac_system.size and (unique.keys - hvac_system.keys).empty?)
+                  if unique[:hwPlant] == hvac_system[:hwPlant] and unique[:chwPlant] == hvac_system[:chwPlant]
+                    #puts "Hot water and chilled water plants match"
+                    if unique[:airloop].include? hvac_system[:airloop][0]
+                      foundmatch = true
+                      #puts "Found match for #{hvac_system}" #do nothing
+                      if(unique[:delivery_type] != hvac_system[:delivery_type])
+                        raise "Air loop handles match but delivery types do not match"
+                      end
+                    else
+                      #puts "Adding air loop #{airLoop.handle.to_s} to unique #{unique}"
+                      unique[:airloop].push(airLoop.handle.to_s)
+                      @air_loops.push(airLoop)
+                      foundmatch = true
+                    end
+                  end
+                else
+                  #do nothing
+                 #puts "This would be weird."  #TODO throw something here.
+                end
+              end
+              if not foundmatch
+               #puts "No match."
+                @unique_hvac_systems.push(hvac_system)
+                @air_loops.push(airLoop)
+              end
+            end
+            
+          else
+            #not sure, do something?
+          end
+
         else
-          #not sure, do something?
+          #not sure, maybe a place to handle hydronic systems? TODO: investigate 
         end
-
-      else
-        #not sure, maybe a place to handle hydronic systems? TODO: investigate 
+        #may be the same as zoneTerm
+        
+        #potentially handle a situation where we must add more equipment that is not air-based.  TODO:future
       end
-      #may be the same as zoneTerm
-      equip = tzone.equipment()
-      #potentially handle a situation where we must add more equipment that is not air-based.  TODO:future
-    end
 
-   #puts "Unique hvac systems found \n #{@unique_hvac_systems}"
-    #now try to create the hvac systems based on these
-    @plant_loops = model.getPlantLoops
-    #puts "Air loops #{@air_loops.length} and \n plant loops #{@plant_loops.length}"
-    #note, there should be as many unique air loops as total air loops, plant loops may not match because of service water
+     #puts "Unique hvac systems found \n #{@unique_hvac_systems}"
+      #now try to create the hvac systems based on these
+      @plant_loops = model.getPlantLoops
+      #puts "Air loops #{@air_loops.length} and \n plant loops #{@plant_loops.length}"
+      #note, there should be as many unique air loops as total air loops, plant loops may not match because of service water
 
-    hvac_systems_arr = [] #a container that holds all individual HVACSystemType objects created, to form HVACSystems
-    puts unique_hvac_systems
-    hvactypect = 0 
-    unique_hvac_systems.each do |hvac_system|
-      if hvac_system[:hwPlant].nil? and hvac_system[:chwPlant].nil?
-        #packaged system, which should each be their own system
-        hvac_system[:airloop].each do |loopy|
-          #make fake plant that needs to be passed
-          fakesys = {}
-          fakesys[:hwPlant] = nil
-          fakesys[:chwPlant] = nil
-          fakesys[:airloop] = [loopy]
+      hvac_systems_arr = [] #a container that holds all individual HVACSystemType objects created, to form HVACSystems
+      puts "Unique Systems #{unique_hvac_systems}"
+      hvactypect = 0 
+      unique_hvac_systems.each do |hvac_system|
+        
 
-          hcool = makeHeatingAndCoolingSystem(model, fakesys)
+        if hvac_system[:hwPlant].nil? and hvac_system[:chwPlant].nil?
+          #packaged system, which should each be their own system
+          hvac_system[:airloop].each do |loopy|
+            #make fake plant that needs to be passed
+            fakesys = {}
+            fakesys[:hwPlant] = nil
+            fakesys[:chwPlant] = nil
+            fakesys[:airloop] = [loopy]
+            fakesys[:delivery_type] = hvac_system[:delivery_type]
+
+            hcool = makeHeatingAndCoolingSystem(model, fakesys)
+
+            duct_air_loops = []
+          
+            full_loop = getAirLoop(loopy)
+            #puts "Full loop passed to DuctSystemsHelper #{full_loop}"
+            duct_air_loops.push(full_loop)
+          
+            #puts duct_air_loops
+            duct_system = nil
+            duct_system = DuctSystemsHelper.new(duct_air_loops).duct_systems
+            puts "Returned duct system #{duct_system}"
+            h = {}
+            children = {}
+            attributes = {}
+            h[:children] = children
+            h[:attributes] = attributes
+            children[:HeatingAndCoolingSystems] = { value: hcool }
+            children[:DuctSystems] = { value: duct_system } 
+            puts children[:DuctSystems]
+            attributes[:ID] = { value: "HVACSystem-"+ hvactypect.to_s}
+            hvac_system_type = HVACSystemType.new(h)
+            #puts "HVAC Systems Type #{hvac_system_type}"
+
+            hvac_systems_arr.push(hvac_system_type)
+            hvactypect = hvactypect + 1
+          end
+          
+
+        elsif hvac_system[:chwPlant].nil? and not hvac_system[:hwPlant].nil?
+          heatingPlant = makeHeatingPlant(model, hvac_system[:hwPlant])
+         #puts "Heating plant #{heatingPlant}"
+          cond_plants = []
+          hvac_system[:airloop].each do |aloop_handle|
+            aloop = getAirLoop(aloop_handle)
+            if not aloop.nil?
+              cl = makeCondensingPlant(model, aloop_handle)
+              if not cl.nil?
+                cond_plants.push(cl)
+              end
+            end
+          end
+
           h = {}
           children = {}
           attributes = {}
           h[:children] = children
           h[:attributes] = attributes
+          children[:HeatingPlantType] = { value: [heatingPlant] }
+          children[:CondenserPlant] = { value: cond_plants }
+          plants = Plants.new(h)
+
+          #make heating and cooling systems
+          hcool = makeHeatingAndCoolingSystem(model, hvac_system)
+          #puts "Heating and cooling system created #{hcool.children}"
+          #make duct systems
+          duct_air_loops = []
+          hvac_system[:airloop].each do |al|
+            full_loop = getAirLoop(al)
+            #puts "Full loop passed to DuctSystemsHelper #{full_loop}"
+            duct_air_loops.push(full_loop)
+          end
+          #puts duct_air_loops
+          duct_system = nil
+          duct_system = DuctSystemsHelper.new(duct_air_loops).duct_systems
+          puts "Returned duct system #{duct_system}"
+          
+          h = {}
+          children = {}
+          attributes = {}
+          h[:children] = children
+          h[:attributes] = attributes
+          children[:Plants] = { value: plants }
           children[:HeatingAndCoolingSystems] = { value: hcool }
+          children[:DuctSystems] = { value: duct_system } 
+          puts children[:DuctSystems]
           attributes[:ID] = { value: "HVACSystem-"+ hvactypect.to_s}
           hvac_system_type = HVACSystemType.new(h)
           #puts "HVAC Systems Type #{hvac_system_type}"
 
           hvac_systems_arr.push(hvac_system_type)
+         #puts "HVACSystems #{@hvac_systems}"
           hvactypect = hvactypect + 1
+        elsif not hvac_system[:chwPlant].nil? and hvac_system[:hwPlant].nil?
+           #TODO, throw here, we've never seen this condition
+           raise "Unexpected situation.  Never have seen a chilled water and hot water plant up to this version of the code base."
+        else
+          raise "Unexpected central plant loop situation encountered."
         end
-        
-
-      elsif hvac_system[:chwPlant].nil? and not hvac_system[:hwPlant].nil?
-        heatingPlant = makeHeatingPlant(model, hvac_system[:hwPlant])
-       #puts "Heating plant #{heatingPlant}"
-        cond_plants = []
-        hvac_system[:airloop].each do |aloop_handle|
-          aloop = getAirLoop(aloop_handle)
-          if not aloop.nil?
-            cl = makeCondensingPlant(model, aloop_handle)
-            if not cl.nil?
-              cond_plants.push(cl)
-            end
-          end
-        end
-
-        h = {}
-        children = {}
-        attributes = {}
-        h[:children] = children
-        h[:attributes] = attributes
-        children[:HeatingPlantType] = { value: [heatingPlant] }
-        children[:CondenserPlant] = { value: cond_plants }
-        plants = Plants.new(h)
-        #puts "Plants #{plants}"
-
-        #make heating and cooling systems
-        hcool = makeHeatingAndCoolingSystem(model, hvac_system)
-       #puts "Heating and cooling system created #{hcool.children}"
-
-        h = {}
-        children = {}
-        attributes = {}
-        h[:children] = children
-        h[:attributes] = attributes
-        children[:Plants] = { value: plants }
-        children[:HeatingAndCoolingSystems] = { value: hcool }
-        attributes[:ID] = { value: "HVACSystem-"+ hvactypect.to_s}
-        hvac_system_type = HVACSystemType.new(h)
-        #puts "HVAC Systems Type #{hvac_system_type}"
-
-        hvac_systems_arr.push(hvac_system_type)
-       #puts "HVACSystems #{@hvac_systems}"
-       hvactypect = hvactypect + 1
-      elsif not hvac_system[:chwPlant].nil? and hvac_system[:hwPlant].nil?
-         #TODO, throw here, we've never seen this condition
-      else
-        #TODO:  This should never happen
-         
+          
       end
-        
+    rescue => error
+      puts "Could not create the HVACSystems node properly"
+      puts error.inspect, error.backtrace
+    ensure
+      h = {}
+      children = {}
+      attributes = {}
+      h[:children] = children
+      h[:attributes] = attributes
+      children[:HVACSystem] = { value: hvac_systems_arr }
+      
+      @hvac_systems = HVACSystems.new(h)
     end
-    h = {}
-    children = {}
-    attributes = {}
-    h[:children] = children
-    h[:attributes] = attributes
-    children[:HVACSystem] = { value: hvac_systems_arr }
-    @hvac_systems = HVACSystems.new(h)
-    # ds = DuctSystemsHelper.new(@air_loops)
-    # sh = {}
-    # schildren = {}
-    # sh[:children] = schildren
-    # schildren[:DuctSystems] = { value: ds.duct_systems }
-    # hvacsystem = HVACSystemType.new(sh);
 
-    # h = {}
-    # children = {}
-    # h[:children] = children
-    # children[:HVACSystem] = {value: [hvacsystem] }
-    # @hvac_systems = HVACSystems.new(h)
   end
 
   def getAirLoop(handle)
@@ -555,7 +714,7 @@ class HVACSystemsHelper
   end
 
   def makeHeatingAndCoolingSystem(model, hvac_system)
-   #puts hvac_system
+    #puts hvac_system
    #puts hvac_system[:hwPlant].nil?
     hch = {}
     hcchildren = {}
@@ -564,6 +723,8 @@ class HVACSystemsHelper
     hch[:attributes] = hcattributes
     heatingsources = []
     coolingsources = []
+    deliveries = []
+    ductsystems = []
     begin
       if not hvac_system[:hwPlant].nil?
         #make Heating Source of Heating and Cooling System  TODO: investigate how to handle more than one boiler
@@ -597,9 +758,10 @@ class HVACSystemsHelper
         children[:HeatingMedium] = { value: HeatingMedium.new({ text: "Hot water" }) } #this is a hard one, isn't the medium of the boiler water, but the coil air?
         #children[:PrimaryFuel] = { value: FuelTypes.new( { text: "Natural gas" }) } #TODO, un-hardcode this to point to the boilers in question...which is possible through model and guids. #TODO: talk with Nick because this messes up the XML serializer
         children[:Quantity] = { value: Quantity.new({ text: 1 }) } #TODO, un-hardcode this to point into the boiler system definition
-       #puts "Heating source hash #{h}"
+        #puts "Heating source hash #{h}"
+        attributes[:ID] = { value: "Heating_Source_"+hvac_system[:hwPlant].to_s}
         heatingsources.push(HeatingSource.new(h))
-       #puts "Made Heating Sources for heating plant"
+        #puts "Made Heating Sources for heating plant"
         
       end
 
@@ -610,7 +772,7 @@ class HVACSystemsHelper
         attributes = {}
         h[:children] = children
         h[:attributes] = attributes
-       #puts "First time seeing a cooling plant"
+        raise "First time seeing a cooling plant"
       end
 
       @air_loops.each do |aloop|
@@ -660,10 +822,13 @@ class HVACSystemsHelper
             children[:AnnualCoolingEfficiencyValue] = { value: AnnualCoolingEfficiencyValue.new( { text: cop.round(2) }) }
             children[:AnnualCoolingEfficiencyUnits] = { value: AnnualCoolingEfficiencyUnits.new({ text: "COP" }) }
             #children[:PrimaryFuel] = { value: FuelTypes.new({ text: "Electricity" }) } #TODO: talk with Nick because this messes up the XML serializer
-
+            attributes[:ID] = { value: "Cooling_Source_"+aloop.handle.to_s }
 
             coolingsources.push(CoolingSource.new(h))
-           #puts "Made Cooling sourcr for 1 speed DX"
+            puts "Made Cooling sourcr for 1 speed DX"
+            #make delivery
+            #NOTE, have not run across this yet
+            deliveries.push(DeliveryHelper.new(hvac_system[:delivery_type], aloop.handle.to_s).delivery)
 
           elsif not dxcoil_two_speed.empty?
 
@@ -671,7 +836,7 @@ class HVACSystemsHelper
           
             c = coil.get.to_CoilCoolingDXTwoSpeed.get
             cop = c.getRatedHighSpeedCOP.get.round(2).to_s #TODO: is this really the best COP that is needed?
-            puts cop.instance_of? String
+            #puts cop.instance_of? String
             #TODO, add other fields as applicable.  Problem is, now many of these are autosized or left blank...
 
             h = {}
@@ -704,10 +869,13 @@ class HVACSystemsHelper
             children[:AnnualCoolingEfficiencyValue] = { value: AnnualCoolingEfficiencyValue.new( { text: cop }) }
             children[:AnnualCoolingEfficiencyUnits] = { value: AnnualCoolingEfficiencyUnits.new({ text: "COP" }) }
             #children[:PrimaryFuel] = { value: FuelTypes.new({ text: "Electricity" }) } #TODO: talk with Nick because this messes up the XML serializer
-           #puts "2speed cooling hash #{h}"
+            attributes[:ID] = { value: "Cooling_Source_"+aloop.handle.to_s }
 
             coolingsources.push(CoolingSource.new(h))
-           #puts "Made cooling source for 2 speed DX"
+            #puts "Made cooling source for 2 speed DX"
+
+            #make delivery
+            deliveries.push(DeliveryHelper.new(hvac_system[:delivery_type], aloop.handle.to_s).delivery)
 
           elsif not gascoil.empty?
             h = {}
@@ -729,24 +897,28 @@ class HVACSystemsHelper
             children[:Quantity] = { value: Quantity.new({ text: 1 }) }
             heatingsources.push(HeatingSource.new(h))
 
-           #puts "Made gas coil heating source"
+            puts "Made gas coil heating source"
+            #make delivery
+            deliveries.push(DeliveryHelper.new(hvac_system[:delivery_type], aloop.handle.to_s).delivery)
+
 
           elsif not elecheatcoil.empty?
             #a very unlikely occurrence
-           #puts "An unexpected thing happened...an electric resistance coil on the supply side..." #TODO: this is a valid case for Aux heat for heat pumps
+            raise "An unexpected thing happened...an electric resistance coil on the supply side..." #TODO: this is a valid case for Aux heat for heat pumps
           end
 
         end
       end
 
     rescue => error
-     puts "Could not create the HeatingAndCoolingSystems properly"
-     puts error.inspect, error.backtrace
+      puts "Could not create the HeatingAndCoolingSystems properly"
+      puts error.inspect, error.backtrace
     ensure
       #puts "Heating sources #{heatingsources}"
       #puts "Cooling sources #{coolingsources}"
       hcchildren[:HeatingSource] = { value: heatingsources }
       hcchildren[:CoolingSource] = { value: coolingsources }
+      hcchildren[:Delivery] = { value: deliveries }
       #multizone or what?
 
       return HeatingAndCoolingSystems.new(hch)
@@ -804,7 +976,7 @@ class HVACSystemsHelper
         begin
           boiler = plant_loop.supplyComponents(OpenStudio::Model::BoilerHotWater::iddObjectType())
           boiler = model.getObject(boiler[0].handle)
-          
+          #TODO, how do we specify more than one boiler?
           b = boiler.get.to_BoilerHotWater.get
           
          #puts b
@@ -856,6 +1028,7 @@ class HVACSystemsHelper
     return nil
   end
 end
+
 
 #creates lighting systems for the Systems Element
 class LightingSystemsHelper
@@ -2149,7 +2322,7 @@ class SurfacesHelper
 end
 
 class WriteXML
-  attr_accessor :makingArray, :mostRecentElement, :xmlDoc, :hasType, :typeSub
+  attr_accessor :makingArray, :mostRecentElement, :xmlDoc, :hasType, :typeSub, :baseType
 
   def initialize
     @makingArray = false
@@ -2158,6 +2331,7 @@ class WriteXML
     #puts @xmlDoc.nil?
     @hasType = false
     @typeSub = ""
+    @baseType = ""
   end
 
   def WritePretty
@@ -2353,14 +2527,16 @@ class WriteXML
                 #puts "No remaining children."
                 self.mostRecentElement = self.mostRecentElement.parent
               end
-              #big cuts happened here
+              
             end
           else
             #it is an array
             #puts "Array, working on value array"
             h[current_key][:value].each do |elArr|
               current_key = elArr.keys[0] #we are assuming here that the key is of the not standard variety
+              #puts elArr
               if(self.hasType)
+                self.baseType = current_key.to_s
                 #puts "Array item is a type, will use #{self.typeSub}"
                 newelement = Element.new(self.typeSub.to_s)
                 self.mostRecentElement.add_element(newelement)
@@ -2377,7 +2553,15 @@ class WriteXML
                 end
                 
               else
-                newelement = Element.new(current_key.to_s)
+                #puts "Array Item May or May not be a type."
+                #puts current_key
+                if(current_key.to_s == self.baseType.to_s)
+                  #puts "Using #{self.typeSub.to_s}"
+                  newelement = Element.new(self.typeSub.to_s)
+                else
+                  #puts "Didnt match basetype #{self.baseType.to_s}"
+                  newelement = Element.new(current_key.to_s)
+                end
                 self.mostRecentElement.add_element(newelement)
                 self.mostRecentElement = newelement
                 child_keys = elArr[current_key].keys
@@ -2395,16 +2579,17 @@ class WriteXML
               end
               if(child_keys.include?(:children))
                 self.hasType = false
-                self.typeSub = ""
+                #self.typeSub = ""
                 hash_to_xml_b(elArr[current_key][:children])
                 self.mostRecentElement = self.mostRecentElement.parent
               else
                 #puts "No remaining children."
                 self.hasType = false
-                self.typeSub = "" 
+                #self.typeSub = "" 
                 self.mostRecentElement = self.mostRecentElement.parent
               end
             end
+            #puts "Ending array for loop"
           end
         end
       end

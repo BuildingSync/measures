@@ -80,7 +80,10 @@ class SimpleElement
       if(args[k][:value].is_a?(Array))
         #puts "Value is an array"
         args[k][:value].each do |c|
-          #puts "Starting to #put array for key #{k}:", args[k]
+          if k.to_s == "Delivery"
+            #puts "Children: #{@children[k]}"
+          end
+          #puts "Starting to #put array for key #{k}:"
           #puts "Children: #{@children[k]}"
           @children[k][:value] << c
         end
@@ -91,9 +94,9 @@ class SimpleElement
             type_match = true
             args[k][:value].each do |a|
               if(@children[k].has_key? :type)
-                puts "Has key type"
+                #puts "Has key type"
                 if(a.class.name != @children[k][:type])
-                  puts "Type mismatch #{a.class.name} and #{@children[k][:type]}"
+                  #puts "Type mismatch #{a.class.name} and #{@children[k][:type]}"
                   type_match = false
                   break
                 end
@@ -378,6 +381,10 @@ class CentralAirDistribution < SimpleElement
   def specify_children
     @children={}
     @children[:AirDeliveryType] = { required: false, value: nil }
+    @children[:TerminalUnit] = { required: false, value: nil }
+    @children[:ReheatSource] = { required: false, value: nil }
+    @children[:ReheatPlantID] = { required: false, value: nil }
+    #TODO add ReheatControlMethod
   end
 end
 
@@ -499,7 +506,7 @@ class DeliveryType < SimpleElement
 end
 
 
-class ReheatPlantID < IDOnlyElement; end
+
 
 class HeatingSourceID < IDOnlyElement; end
 class CoolingSourceID < IDOnlyElement; end
@@ -858,7 +865,7 @@ class HeatingAndCoolingSystems < SimpleElement
     @children[:ZoningSystemType] = { required: false, value: nil}
     @children[:HeatingSource] = { required: false, value: [] }
     @children[:CoolingSource] = { required: false, value: [] }
-    @children[:Delivery] = { required: false, value: nil}
+    @children[:Delivery] = { required: false, value: [] }
     #TODO: add more as necessary
   end
 end
@@ -937,7 +944,7 @@ class HVACSystemType < SimpleElement
     @children = {}
     @children[:Plants] = { required: false, value: nil }
     @children[:HeatingAndCoolingSystems] = { required: false, value: nil }
-    @children[:DuctSystems] = { required: false, value:nil }
+    @children[:DuctSystems] = { required: false, value: nil }
     @children[:OtherHVACSystems] = { required: false, value: nil }
     #TODO: Add other children as needed
   end
@@ -1287,6 +1294,17 @@ end
 
 class Quantity < SimpleElement; end
 
+class ReheatSource < EnumeratedElement
+  def specify_enums
+    @enums = ["Heating plant",
+              "Local electric resistance",
+              "Local gas",
+              "Other",
+              "Unknown"]
+  end
+end
+class ReheatPlantID < IDOnlyElement; end
+
 class RoofID < SimpleElement
   def specify_children 
     @children = {}
@@ -1591,6 +1609,21 @@ class Systems < SimpleElement
     @children[:FenestrationSystems] = { required:false, value: nil }
     @children[:FoundationSystems] = { required:false, value: nil }
     @children[:PlugLoads] = { required:false, value: nil }
+  end
+end
+
+class TerminalUnit < EnumeratedElement
+  def specify_enums
+    @enums = ["CAV terminal box with reheat",
+              "VAV terminal box fan powered no reheat",
+              "VAV terminal box fan powered with reheat",
+              "VAV terminal box not fan powered no reheat",
+              "VAV terminal box not fan powered with reheat",
+              "Automatically controlled register",
+              "Manually controlled register",
+              "Uncontrolled register",
+              "Other",
+              "Unknown"]
   end
 end
 
