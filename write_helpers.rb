@@ -380,7 +380,7 @@ class DuctSystemsHelper
         children[:Quantity] = { value: Quantity.new({ text: 1 }) }
         children[:Location] = { value: Location.new({ text: "Interior" }) } #TODO, how to NOT hardcode this?
 
-        puts delh
+        #puts delh
         #create linked premises
         #at a minimum, we want the space object which contains a linked space id and a set of schedules
         #work inside out, schedules, space id, and then linked premises
@@ -425,8 +425,8 @@ class DuctSystemsHelper
       # #hash alread defined globally at the top of initialize
       # children[:DuctSystem] = { value: duct_systems_arr }
       # @duct_systems = DuctSystems.new(h)
-      puts "Successfully created Duct systems"
-      puts duct_systems_arr[0].children
+      #puts "Successfully created Duct systems"
+      #puts duct_systems_arr[0].children
 
     rescue => error
       puts "Could not create the DuctSystems element properly"
@@ -498,7 +498,7 @@ class HVACSystemsHelper
               end
             end
           else
-            puts zoneTerm
+            #puts zoneTerm
             raise "Unanticipated or new hvac delivery type."
           end
           
@@ -582,7 +582,7 @@ class HVACSystemsHelper
       #note, there should be as many unique air loops as total air loops, plant loops may not match because of service water
 
       hvac_systems_arr = [] #a container that holds all individual HVACSystemType objects created, to form HVACSystems
-      puts "Unique Systems #{unique_hvac_systems}"
+      #puts "Unique Systems #{unique_hvac_systems}"
       hvactypect = 0 
       unique_hvac_systems.each do |hvac_system|
         
@@ -608,7 +608,7 @@ class HVACSystemsHelper
             #puts duct_air_loops
             duct_system = nil
             duct_system = DuctSystemsHelper.new(duct_air_loops).duct_systems
-            puts "Returned duct system #{duct_system}"
+            #puts "Returned duct system #{duct_system}"
             h = {}
             children = {}
             attributes = {}
@@ -616,7 +616,7 @@ class HVACSystemsHelper
             h[:attributes] = attributes
             children[:HeatingAndCoolingSystems] = { value: hcool }
             children[:DuctSystems] = { value: duct_system } 
-            puts children[:DuctSystems]
+            #puts children[:DuctSystems]
             attributes[:ID] = { value: "HVACSystem-"+ hvactypect.to_s}
             hvac_system_type = HVACSystemType.new(h)
             #puts "HVAC Systems Type #{hvac_system_type}"
@@ -662,7 +662,7 @@ class HVACSystemsHelper
           #puts duct_air_loops
           duct_system = nil
           duct_system = DuctSystemsHelper.new(duct_air_loops).duct_systems
-          puts "Returned duct system #{duct_system}"
+          #puts "Returned duct system #{duct_system}"
           
           h = {}
           children = {}
@@ -672,7 +672,7 @@ class HVACSystemsHelper
           children[:Plants] = { value: plants }
           children[:HeatingAndCoolingSystems] = { value: hcool }
           children[:DuctSystems] = { value: duct_system } 
-          puts children[:DuctSystems]
+          #puts children[:DuctSystems]
           attributes[:ID] = { value: "HVACSystem-"+ hvactypect.to_s}
           hvac_system_type = HVACSystemType.new(h)
           #puts "HVAC Systems Type #{hvac_system_type}"
@@ -985,7 +985,7 @@ class HVACSystemsHelper
           attributes = {}
           h[:children] = children
           h[:attributes] = attributes
-          children[:BoilerType] = { value: BoilerType.new({ value: "Hot water" }) }
+          children[:BoilerType] = { value: BoilerType.new({ text: "Hot water" }) }
           children[:ThermalEfficiency] = { value: ThermalEfficiency.new({ text: b.nominalThermalEfficiency }) }
           if not b.nominalCapacity.empty?
             children[:OutputCapacity] = { value: OutputCapacity.new({ text: b.nominalCapacity.get }) }
@@ -2464,10 +2464,12 @@ class WriteXML
     #puts "#{h.keys}"
     h.keys.each do |master_key|
       current_key = master_key
-      #puts "Working on hash #{h[current_key]}"
+      if(current_key.to_s == "HVACSystemType" or current_key.to_s == "HVACSystem")
+        puts "Working on hash #{h[current_key]}"
+      end
       if(standard_keys.include?(current_key))
         #THIS SHOULD NEVER HAPPEN
-        #puts "key of hash passed in is not a class definition.  Seeing a standard"
+        puts "key of hash passed in is not a class definition.  Seeing a standard"
       elsif(current_key.to_s == "Audits")
         #puts "Pass 1"
         firstelement = Element.new(current_key.to_s)
@@ -2480,22 +2482,22 @@ class WriteXML
         if (h[current_key].keys & ["required","value"]).empty? #set intersection here assures we follwing the standard required, value, pattern i.e. it should be ":Audit" => :required, :value, etc.
           #go down into the :value, whose only key should be the same (this is the fast forward point)
           if(h[current_key].has_key?(:type))
-            self.hasType = true #TODO when to set to false?
+            self.hasType = true
             self.typeSub = current_key #this is for downstream children
             #puts "Contains a type.  Will replace downstream children with #{current_key}"
           end
-          if(!h[current_key][:value].is_a?(Array))
+          if(not h[current_key][:value].is_a?(Array))
             if(h[current_key][:value].keys[0]) == current_key #first match
               #puts "Fast Forward Match as expected"
               #this is new, build the element right now
               if(self.hasType)
-                #puts "Making element #{self.typeSub}"
+                puts "Making element #{self.typeSub}"
                 newelement = Element.new(self.typeSub)
                 self.mostRecentElement.add_element(newelement)
                 self.mostRecentElement = newelement
 
-                self.hasType = false
-                self.typeSub = ""
+                #self.hasType = false
+                #self.typeSub = ""
               else
                 #puts "Making element #{current_key.to_s}"
                 newelement = Element.new(current_key.to_s)
@@ -2534,6 +2536,8 @@ class WriteXML
             #puts "Array, working on value array"
             h[current_key][:value].each do |elArr|
               current_key = elArr.keys[0] #we are assuming here that the key is of the not standard variety
+              #puts "Current key: #{current_key}"
+              #puts "Base type: #{self.baseType}"
               #puts elArr
               if(self.hasType)
                 self.baseType = current_key.to_s
@@ -2553,14 +2557,20 @@ class WriteXML
                 end
                 
               else
-                #puts "Array Item May or May not be a type."
-                #puts current_key
+                if (current_key.to_s == "HVACSystemType")
+                  puts "Array Item May or May not be a type."
+                  puts current_key
+                end
                 if(current_key.to_s == self.baseType.to_s)
                   #puts "Using #{self.typeSub.to_s}"
                   newelement = Element.new(self.typeSub.to_s)
                 else
-                  #puts "Didnt match basetype #{self.baseType.to_s}"
-                  newelement = Element.new(current_key.to_s)
+                  #puts "#{current_key.to_s} Didnt match basetype #{self.baseType.to_s}"
+                  if(current_key.to_s == "HVACSystemType")
+                    newelement = Element.new("HVACSystem") #TODO: Improve
+                  else
+                    newelement = Element.new(current_key.to_s)
+                  end
                 end
                 self.mostRecentElement.add_element(newelement)
                 self.mostRecentElement = newelement
@@ -2584,7 +2594,7 @@ class WriteXML
                 self.mostRecentElement = self.mostRecentElement.parent
               else
                 #puts "No remaining children."
-                self.hasType = false
+                #self.hasType = false
                 #self.typeSub = "" 
                 self.mostRecentElement = self.mostRecentElement.parent
               end

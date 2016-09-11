@@ -42,33 +42,37 @@ class SimpleElement
   end
   #initializes the simplest of elements with text that is passed in
   def post_initialize(args)
-    #puts "Post initialization begun."
-    specify_children()
-    specify_attributes()
-    if(!args.nil?)
-      if(args.is_a?(Hash))
-        if(args.has_key? :children)
-          bulk_children(args[:children])
-        end
-        if(args.has_key? :attributes)
-          #puts "Has attributes"
-          args[:attributes].keys.each do |a|
-            #puts "Writing attribute:", a
-            @attributes[a] = args[:attributes][a] #TODO, this should have better error checking in it, like is a field required but is passed nil?
+    begin
+      specify_children()
+      specify_attributes()
+      if(!args.nil?)
+        if(args.is_a?(Hash))
+          if(args.has_key? :children)
+            bulk_children(args[:children])
+          end
+          if(args.has_key? :attributes)
+            #puts "Has attributes"
+            args[:attributes].keys.each do |a|
+              #puts "Writing attribute:", a
+              @attributes[a] = args[:attributes][a] #TODO, this should have better error checking in it, like is a field required but is passed nil?
+            end
+          end
+          if(args.has_key? :text)
+            #puts "Added text", args[:text]
+            @text = args[:text]
+          else
+            #TODO #put error that the proper hash keys were not identified.
           end
         end
-        if(args.has_key? :text)
-          #puts "Added text", args[:text]
-          @text = args[:text]
-        else
-          #TODO #put error that the proper hash keys were not identified.
-        end
+      else
+        #TODO give some indication that no arguments were provided
       end
-    else
-      #TODO give some indication that no arguments were provided
+      #TODO - make this active only on a boolean, possibly filter
+      delete_unwanted_children()
+    rescue => error
+      puts "Could not create the BuildingSync element properly."
+      puts error.inspect, error.backtrace
     end
-    #TODO - make this active only on a boolean, and also a filter, not an actual delete
-    delete_unwanted_children()
   end
 
 
@@ -169,12 +173,23 @@ class EnumeratedElement < SimpleElement
   end
 
   def post_initialize(args)
-    specify_enums()
-    if(@enums.include? args[:text])
-      @text = args[:text]
-    else
-      #TODO: #put some type of warning to alert user unable to assign the text
+    begin
+      specify_enums()
+      if(@enums.include? args[:text])
+        @text = args[:text]
+      else
+        #TODO: #put some type of warning to alert user unable to assign the text
+        raise "Text defined for this #{self.class} enumeration is not valid.  #{args}  Check BuildingSync for valid enums."
+      end
+      delete_enums()
+    rescue => error
+      puts "Could not create the BuildingSync Enumerated element properly."
+      puts error.inspect, error.backtrace
     end
+  end
+
+  def delete_enums
+    @enums = []
   end
 
 
