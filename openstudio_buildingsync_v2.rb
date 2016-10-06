@@ -264,6 +264,19 @@ class AirSideEconomizerType < EnumeratedElement
   end
 end
 
+class AnnualCoolingEfficiencyValue < SimpleElement; end
+
+class AnnualCoolingEfficiencyUnits < EnumeratedElement
+  def specify_enums
+    @enums = ["COP",
+              "EER",
+              "SEER",
+              "kW/ton",
+              "Other"
+    ]
+  end
+end
+
 class AspectRatio < SimpleElement;end
 
 
@@ -355,6 +368,7 @@ class CeilingID < SimpleElement
   end
 
   def specify_attributes
+    @attributes = {}
     @attributes[:IDref] = { required:true, text: nil }
   end
 
@@ -403,6 +417,42 @@ class CentralAirDistribution < SimpleElement
   end
 end
 
+class ChilledWaterSupplyTemperature < SimpleElement; end
+
+class Chiller < SimpleElement
+  def specify_children
+    @children={}
+    @children[:ChillerType] = { required: false, value: nil }
+    @children[:ChillerCompressorDriver] = { required: false, value: nil }
+    @children[:CondenserPlantID] = { required: false, value: [] }
+    @children[:AnnualCoolingEfficiencyValue] = { required: false, value: nil }
+    @children[:AnnualCoolingEfficiencyUnits] = { required: false, value: nil }
+    @children[:ChilledWaterSupplyTemperature] = { required: false, value: nil }
+    @children[:Quantity] = { required: false, value: nil }
+  end
+end
+
+class ChillerCompressorDriver < EnumeratedElement
+  def specify_enums
+    @enums = ["Electric Motor",
+              "Steam",
+              "Gas Turbine",
+              "Other",
+              "Unknown"
+    ]
+  end
+end
+
+class ChillerType < EnumeratedElement
+  def specify_enums
+    @enums = ["Vapor compression",
+              "Absorption",
+              "Other",
+              "Unknown"
+    ]
+  end
+end
+
 class CompressorStaging < EnumeratedElement
   def specify_enums
     @enums = ["Single stage",
@@ -441,6 +491,13 @@ class CoolingDeliveryID < SimpleElement
     @attributes[:ID] = { required: false, value: nil }
   end
 
+end
+
+class CoolingPlantType < SimpleElement
+  def specify_children
+    @children = {}
+    @children[:Chiller] = { required: false, value:[]}
+  end
 end
 
 class CoolingSource < SimpleElement

@@ -51,7 +51,8 @@ class AuditHelper
 
     sys = Systems.new(h);
     #make schedules
-
+    os_schedules = os_model.getSchedules
+    scheds = SchedulesHelper.new(os_schedules)
 
     #make site
     sh = SiteHelper.new(os_model)
@@ -564,7 +565,7 @@ class HVACSystemsHelper
             end
             
           else
-            #not sure, do something?
+            puts "Air loop is empty." 
           end
 
         else
@@ -585,8 +586,7 @@ class HVACSystemsHelper
       #puts "Unique Systems #{unique_hvac_systems}"
       hvactypect = 0 
       unique_hvac_systems.each do |hvac_system|
-        
-
+        puts hvac_system
         if hvac_system[:hwPlant].nil? and hvac_system[:chwPlant].nil?
           #packaged system, which should each be their own system
           hvac_system[:airloop].each do |loopy|
@@ -628,7 +628,7 @@ class HVACSystemsHelper
 
         elsif hvac_system[:chwPlant].nil? and not hvac_system[:hwPlant].nil?
           heatingPlant = makeHeatingPlant(model, hvac_system[:hwPlant])
-         #puts "Heating plant #{heatingPlant}"
+          #puts "Heating plant #{heatingPlant}"
           cond_plants = []
           hvac_system[:airloop].each do |aloop_handle|
             aloop = getAirLoop(aloop_handle)
@@ -649,7 +649,7 @@ class HVACSystemsHelper
           children[:CondenserPlant] = { value: cond_plants }
           plants = Plants.new(h)
 
-          #make heating and cooling systems
+          #make heating and cooling systems (packagedd systems)
           hcool = makeHeatingAndCoolingSystem(model, hvac_system)
           #puts "Heating and cooling system created #{hcool.children}"
           #make duct systems
@@ -681,10 +681,21 @@ class HVACSystemsHelper
          #puts "HVACSystems #{@hvac_systems}"
           hvactypect = hvactypect + 1
         elsif not hvac_system[:chwPlant].nil? and hvac_system[:hwPlant].nil?
-           #TODO, throw here, we've never seen this condition
-           raise "Unexpected situation.  Never have seen a chilled water and hot water plant up to this version of the code base."
-        else
-          raise "Unexpected central plant loop situation encountered."
+          #throw here, we've never seen this condition
+          raise "Unexpected situation.  Never have seen a chilled water and hot water plant up to this version of the code base."
+        elsif not hvac_system[:chwPlant].nil? and not hvac_system[:hwPlant].nil?
+          puts "Heating and cooling plant to be defined."
+          heatingPlant = makeHeatingPlant(model, hvac_system[:hwPlant])
+          makeCoolingPlant(model,hvac_system[:chwPlant])
+
+          h = {}
+          children = {}
+          attributes = {}
+          h[:children] = children
+          h[:attributes] = attributes
+          children[:HeatingPlantType] = { value: [heatingPlant] }
+          #children[:CondenserPlant] = { value: cond_plants }
+          plants = Plants.new(h)
         end
           
       end
@@ -715,7 +726,7 @@ class HVACSystemsHelper
 
   def makeHeatingAndCoolingSystem(model, hvac_system)
     #puts hvac_system
-   #puts hvac_system[:hwPlant].nil?
+    #puts hvac_system[:hwPlant].nil?
     hch = {}
     hcchildren = {}
     hcattributes = {}
@@ -897,7 +908,7 @@ class HVACSystemsHelper
             children[:Quantity] = { value: Quantity.new({ text: 1 }) }
             heatingsources.push(HeatingSource.new(h))
 
-            puts "Made gas coil heating source"
+            #puts "Made gas coil heating source"
             #make delivery
             deliveries.push(DeliveryHelper.new(hvac_system[:delivery_type], aloop.handle.to_s).delivery)
 
@@ -970,6 +981,91 @@ class HVACSystemsHelper
     return nil
   end
 
+  def getCondenserPlantIDs(handle, type)
+    plantIds = []
+    @plant_loops.each do |plant_loop|
+      puts plant_loop
+      potential = plant_loop.demandComponents(type)    
+      puts "potential found?", !potential.empty?, potential
+      if not potential.empty?
+        x = potential[0].handle
+        puts "Got handle", x
+        puts "Passed handle", handle
+        if x.to_s == handle.to_s
+          puts "handles match"
+          h = {}
+          attributes = {}
+          h[:attributes] = attributes
+          attributes[:ID] = { value: plant_loop.handle.to_s }
+          puts h
+          plantId = CondenserPlantID.new(h)
+          puts plantId
+          plantIds.push(plantId)
+        end
+      end
+    end
+    return plantIds
+  end
+
+  def makeCoolingPlant(model,handle)
+    
+    @plant_loops.each do |plant_loop|
+      if plant_loop.handle.to_s == handle
+        begin
+
+          #puts plant_loop
+          #TODO: how or when to expand this to handle more types of chillers?
+          type = OpenStudio::Model::ChillerElectricEIR::iddObjectType() #TODO, hard coded, likely need to build switch statement as more chiller types emerge
+          chiller = plant_loop.supplyComponents(type)
+          puts chiller
+          chillerHandle = chiller[0].handle
+          chiller = model.getObject(chillerHandle)
+          
+          c = chiller.get.to_ChillerElectricEIR.get
+          puts c.referenceCOP
+          condenserType = c.condenserType
+          puts condenserType
+          puts "Condenser Node", c.condenserOutletNodeName.get
+          #cond = model.getObject(c.condenserOutletNodeName.get)
+          #puts cond
+          condenserPlantIDs = []
+          if(condenserType == "WaterCooled")
+            condenserPlantIDs = getCondenserPlantIDs(chillerHandle, type)
+          else
+
+          end
+
+          h = {}
+          children = {}
+          attributes = {}
+          h[:children] = children
+          h[:attributes] = attributes
+          children[:ChillerType] = { value: ChillerType.new({ text: "Vapor compression" }) } #TODO: Hard coded, not being specific
+          children[:ChillerCompressorDriver] = { value: ChillerCompressorDriver.new({ text: "Electric Motor" }) }
+          children[:AnnualCoolingEfficiencyValue] = { value: AnnualCoolingEfficiencyValue.new({ value: c.referenceCOP }) }
+          children[:AnnualCoolingEfficiencyUnits] = { value: AnnualCoolingEfficiencyUnits.new({ text: "COP" }) }
+          children[:ChilledWaterSupplyTemperature] = { value: ChilledWaterSupplyTemperature.new({ value: c.referenceLeavingChilledWaterTemperature }) }
+          children[:Quantity] = { value: Quantity.new({ value: 1 }) } #TODO, how to extend beyond one, more complex plants?
+          if condenserPlantIDs.length > 0
+            children[:CondenserPlantID] = { value: condenserPlantIDs }
+          end
+          puts h
+        rescue
+          h = {}
+          children = {}
+          attributes = {}
+          h[:children] = children
+          h[:attributes] = attributes
+          attributes[:ID] =  { text: "undefined-coolingplant"}
+          cpt = CoolingPlantType.new(h)
+          throw "An error occurred making the Heating Plant for plant handle #{handle}"
+        ensure
+          return cpt
+        end
+      end
+    end
+  end
+
   def makeHeatingPlant(model, handle)
     @plant_loops.each do |plant_loop|
       if plant_loop.handle.to_s == handle
@@ -989,7 +1085,6 @@ class HVACSystemsHelper
           children[:ThermalEfficiency] = { value: ThermalEfficiency.new({ text: b.nominalThermalEfficiency }) }
           if not b.nominalCapacity.empty?
             children[:OutputCapacity] = { value: OutputCapacity.new({ text: b.nominalCapacity.get }) }
-
             children[:CapacityUnits] = { value: CapacityUnits.new({ text: "kW"}) }
           end
 
@@ -1201,14 +1296,16 @@ class PlugLoadsHelper
 end
 
 
-class SchedulesHelp
+class SchedulesHelper
+  attr_accessor :schedules
 
-  def initialize; end
-
-  def make_bs_schedules(os_schedules)
+  def initialize(os_schedules) 
     #make building sync schedules array
     schedules_h = {}
-    schedules_h[:children] = {}
+    schedules_children = {}
+    schedules_attributes = {}
+    schedules_h[:children] = schedules_children
+    schedules_h[:attributes] = schedules_attributes
 
     os_schedules.each do |os_schedule|
       #make a ScheduleType
@@ -1247,7 +1344,7 @@ class SchedulesHelp
               #don't make anything new
             end
           else
-            #RODO: #put some error there is no start date
+            #TODO: #put some error there is no start date
           end
           if not rule.endDate.empty?
             if(end_date.nil?)
@@ -1263,49 +1360,53 @@ class SchedulesHelp
           else
             #TODO:  #put some error there is no end date
           end
+          if not start_date.nil? and not end_date.nil?
+            days = os_schedule.to_ScheduleRuleset.get.getDaySchedules(start_date,end_date)
+            #puts days
+          end
           #make ScheduleDetails
           #puts rule
           
-          if(rule.applyMonday&&rule.applyTuesday&&rule.applyWednesday&&rule.applyThursday&&rule.applyFriday)
-            if(rule.applySunday&&rule.applySaturday)
-              dt = DayType.new(text:"All week")
-              daytypevector.push(dt)
-            else
-              dt = DayType.new(text:"Weekday")
-              daytypevector.push(dt)
-            end
+          # if(rule.applyMonday&&rule.applyTuesday&&rule.applyWednesday&&rule.applyThursday&&rule.applyFriday)
+          #   if(rule.applySunday&&rule.applySaturday)
+          #     dt = DayType.new(text:"All week")
+          #     daytypevector.push(dt)
+          #   else
+          #     dt = DayType.new(text:"Weekday")
+          #     daytypevector.push(dt)
+          #   end
             
-          elsif(rule.applySaturday && rule.applySunday)
-            dt = DayType.new(text:"Weekend")
-            daytypevector.push(dt)
-          else
-            if(rule.applyMonday)
-              dt = DayType.new(text:"Monday")
-              daytypevector.push(dt)
-            elsif rule.applyTuesday
-              dt = DayType.new(text:"Tuesday")
-              daytypevector.push(dt)
-            elsif rule.applyWednesday
-              dt = DayType.new(text:"Wednesday")
-              daytypevector.push(dt)
-            elsif rule.applyThursday
-              dt = DayType.new(text:"Thursday")
-              daytypevector.push(dt)
-            elsif rule.applyFriday
-              dt = DayType.new(text:"Friday")
-              daytypevector.push(dt)
-            elsif rule.applySaturday
-              dt = DayType.new(text:"Saturday")
-              daytypevector.push(dt)
-            elsif rule.applySunday
-              dt = DayType.new(text:"Sunday")
-              daytypevector.push(dt)
-            else #TODO: Is there really no applyHoliday?
-              dt = DayType.new(text:"Holiday")
-              daytypevector.push(dt)
-            end
+          # elsif(rule.applySaturday && rule.applySunday)
+          #   dt = DayType.new(text:"Weekend")
+          #   daytypevector.push(dt)
+          # else
+          #   if(rule.applyMonday)
+          #     dt = DayType.new(text:"Monday")
+          #     daytypevector.push(dt)
+          #   elsif rule.applyTuesday
+          #     dt = DayType.new(text:"Tuesday")
+          #     daytypevector.push(dt)
+          #   elsif rule.applyWednesday
+          #     dt = DayType.new(text:"Wednesday")
+          #     daytypevector.push(dt)
+          #   elsif rule.applyThursday
+          #     dt = DayType.new(text:"Thursday")
+          #     daytypevector.push(dt)
+          #   elsif rule.applyFriday
+          #     dt = DayType.new(text:"Friday")
+          #     daytypevector.push(dt)
+          #   elsif rule.applySaturday
+          #     dt = DayType.new(text:"Saturday")
+          #     daytypevector.push(dt)
+          #   elsif rule.applySunday
+          #     dt = DayType.new(text:"Sunday")
+          #     daytypevector.push(dt)
+          #   else #TODO: Is there really no applyHoliday?
+          #     dt = DayType.new(text:"Holiday")
+          #     daytypevector.push(dt)
+          #   end
               
-          end
+          # end
           #rule.applyMonday good
 
           #puts rule.daySchedule
@@ -1317,7 +1418,122 @@ class SchedulesHelp
       #rules = os_schedule.scheduleRules
       #day_schedules = os_schedule
     end
+
   end
+
+  # def make_bs_schedules(os_schedules)
+  #   #make building sync schedules array
+  #   schedules_h = {}
+  #   schedules_h[:children] = {}
+
+  #   os_schedules.each do |os_schedule|
+  #     #make a ScheduleType
+  #     h = {}
+  #     children = {}
+  #     attributes = {}
+  #     h[:children] = children
+  #     h[:attributes] = attributes
+  #     attributes[:ID] = { :value => os_schedule.handle.to_s }
+  #     puts os_schedule
+
+  #     if not os_schedule.to_ScheduleRuleset.empty?
+  #       rules = os_schedule.to_ScheduleRuleset.get.scheduleRules
+        
+  #       start_date = nil
+  #       end_date= nil
+  #       ruleset_name = nil
+  #       detailsvector = []
+  #       h_details = {}
+  #       h_details[:children] = {}
+  #       h_details[:attributes] = {}
+
+  #       rules.each do |rule|
+  #         if not rule.startDate.empty?
+  #           if(start_date.nil?)
+  #             children[:SchedulePeriodBeginDate] = SchedulePeriodBeginDate.new(text: rule.startDate.get)
+  #             start_date = rule.startDate.get
+  #           elsif(rule.startDate.get != start_date)
+  #             detailsvector.push(ScheduleDetails.new({ children: h_details[:children] })) #set the details vector
+  #             children[:ScheduleDetails] = { value: detailsvector }
+
+  #             children[:SchedulePeriodBeginDate] = SchedulePeriodBeginDate.new(text: rule.startDate.get) #start over again
+  #             start_date = rule.startDate.get
+  #             detailsvector = Array.new
+  #           else
+  #             #don't make anything new
+  #           end
+  #         else
+  #           #RODO: #put some error there is no start date
+  #         end
+  #         if not rule.endDate.empty?
+  #           if(end_date.nil?)
+  #             children[:SchedulePeriodEndDate] = SchedulePeriodEndDate.new(text: rule.endDate.get)
+  #             end_date = rule.endDate.get
+  #           elsif(rule.startDate.get != end_date)
+  #             children[:SchedulePeriodEndDate] = SchedulePeriodEndDate.new(text: rule.endDate.get)
+  #             end_date = rule.endDate.get
+  #           else
+  #             #don't make anything new
+  #           end
+            
+  #         else
+  #           #TODO:  #put some error there is no end date
+  #         end
+  #         #make ScheduleDetails
+  #         #puts rule
+          
+  #         if(rule.applyMonday&&rule.applyTuesday&&rule.applyWednesday&&rule.applyThursday&&rule.applyFriday)
+  #           if(rule.applySunday&&rule.applySaturday)
+  #             dt = DayType.new(text:"All week")
+  #             daytypevector.push(dt)
+  #           else
+  #             dt = DayType.new(text:"Weekday")
+  #             daytypevector.push(dt)
+  #           end
+            
+  #         elsif(rule.applySaturday && rule.applySunday)
+  #           dt = DayType.new(text:"Weekend")
+  #           daytypevector.push(dt)
+  #         else
+  #           if(rule.applyMonday)
+  #             dt = DayType.new(text:"Monday")
+  #             daytypevector.push(dt)
+  #           elsif rule.applyTuesday
+  #             dt = DayType.new(text:"Tuesday")
+  #             daytypevector.push(dt)
+  #           elsif rule.applyWednesday
+  #             dt = DayType.new(text:"Wednesday")
+  #             daytypevector.push(dt)
+  #           elsif rule.applyThursday
+  #             dt = DayType.new(text:"Thursday")
+  #             daytypevector.push(dt)
+  #           elsif rule.applyFriday
+  #             dt = DayType.new(text:"Friday")
+  #             daytypevector.push(dt)
+  #           elsif rule.applySaturday
+  #             dt = DayType.new(text:"Saturday")
+  #             daytypevector.push(dt)
+  #           elsif rule.applySunday
+  #             dt = DayType.new(text:"Sunday")
+  #             daytypevector.push(dt)
+  #           else #TODO: Is there really no applyHoliday?
+  #             dt = DayType.new(text:"Holiday")
+  #             daytypevector.push(dt)
+  #           end
+              
+  #         end
+  #         #rule.applyMonday good
+
+  #         #puts rule.daySchedule
+  #       end #end rules do
+  #       #not sure how to do ScheduleCateogory
+        
+  #     end
+
+  #     #rules = os_schedule.scheduleRules
+  #     #day_schedules = os_schedule
+  #   end
+  # end
 end
 
 class SidesHelper
@@ -2242,13 +2458,13 @@ class SurfacesHelper
         children = {}
         h[:children] = children
         h[:attributes] = attributes
-        attributes[:IDref] = { text: os_ceiling.handle.to_s }
-        area = gh.calculate_surface_area(os_ceiling.vertices) #GeoHelp
-        fa =CeilingArea.new({ text: floorarea })
+        attributes[:IDref] = { value: os_ceiling.handle.to_s }
+        ceilarea = gh.calculate_surface_area(os_ceiling.vertices) #GeoHelp
+        fa =CeilingArea.new({ text: ceilarea })
         children[:CeilingArea] = { value: fa }
         #by its nature a ceiling has no insulation for commercial buildings?
         #TODO, this could be improved but the use case needs better explanation
-        chilren[:CeilingInsulatedArea] = { value: CeilingInsulatedArea.new({ text: 0 })}
+        children[:CeilingInsulatedArea] = { value: CeilingInsulatedArea.new({ text: 0 })}
         @ceilings.push(CeilingID.new(h))
       end
 
@@ -2465,11 +2681,11 @@ class WriteXML
     h.keys.each do |master_key|
       current_key = master_key
       if(current_key.to_s == "HVACSystemType" or current_key.to_s == "HVACSystem")
-        puts "Working on hash #{h[current_key]}"
+        #puts "Working on hash #{h[current_key]}"
       end
       if(standard_keys.include?(current_key))
         #THIS SHOULD NEVER HAPPEN
-        puts "key of hash passed in is not a class definition.  Seeing a standard"
+        #puts "key of hash passed in is not a class definition.  Seeing a standard"
       elsif(current_key.to_s == "Audits")
         #puts "Pass 1"
         firstelement = Element.new(current_key.to_s)
@@ -2491,7 +2707,7 @@ class WriteXML
               #puts "Fast Forward Match as expected"
               #this is new, build the element right now
               if(self.hasType)
-                puts "Making element #{self.typeSub}"
+                #puts "Making element #{self.typeSub}"
                 newelement = Element.new(self.typeSub)
                 self.mostRecentElement.add_element(newelement)
                 self.mostRecentElement = newelement
@@ -2558,8 +2774,8 @@ class WriteXML
                 
               else
                 if (current_key.to_s == "HVACSystemType")
-                  puts "Array Item May or May not be a type."
-                  puts current_key
+                  #puts "Array Item May or May not be a type."
+                  #puts current_key
                 end
                 if(current_key.to_s == self.baseType.to_s)
                   #puts "Using #{self.typeSub.to_s}"
