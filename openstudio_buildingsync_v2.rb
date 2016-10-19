@@ -761,6 +761,66 @@ class FanBasedDistributionType < SimpleElement
   end
 end
 
+class FanApplication < EnumeratedElement
+  def specify_enums
+    @enums = ["Supply",
+            "Return",
+            "Exhaust",
+            "Other",
+            "Unknown"]
+  end
+end
+
+class FanControlType < EnumeratedElement
+  def specify_enums
+    @enums = ["Variable Volume",
+              "Stepped",
+              "Constant Volume",
+              "Other",
+              "Unknown"]
+  end
+end
+
+class FanEfficiency < SimpleElement; end
+
+class FanPlacement < EnumeratedElement 
+  def specify_enums
+    @enums = ["Series"
+              "Parallel",
+              "Draw Through",
+              "Blow Through",
+              "Other",
+              "Unknown"]
+  end
+end
+
+
+class FanSystemType < SimpleElement
+  def specify_children
+    @children = {}
+    @children[:FanEfficiency] = { required: false, value: nil }
+    @children[:FanApplication] = { required: false, value: nil }
+    @children[:FanControlType] = { required: false, value: nil }
+    @children[:MotorLocationRelativeToAirStream] = { required: false, value: nil }
+    @children[:FanPlacement] = { required: false, value: nil }
+    @children[:Quantity] = { required: false, value: nil }
+    @children[:Location] = { required: false, value: nil }
+    @children[:LinkedSystemID] = { required: false, value: nil }
+    #TODO: Add more children as required.
+  end
+  def specify_attributes
+    @attributes = {}
+    @attributes[:ID] = { required:false, text: nil }
+  end
+end
+
+class FanSystems < SimpleElement
+  def specify_children
+    @children = {}
+    @children[:FanSystem] = { required: false, type:"FanSystemType", value: [] }
+  end
+end
+
 class FenestrationArea < SimpleElement; end
 
 class FenestrationSystems < SimpleElement
@@ -1123,6 +1183,8 @@ end
 
 class LinkedScheduleID < IDOnlyElement; end
 
+class LinkedSystemID <  IDOnlyElement; end
+
 class LinkedThermalZoneID < IDOnlyElement; end
 
 class LinkedPremises < SimpleElement
@@ -1149,6 +1211,8 @@ end
 
 class Longitude < SimpleElement; end
 class Latitude < SimpleElement; end
+
+class MotorLocationRelativeToAirStream < SimpleElement; end
 
 class SlabArea < SimpleElement; end
 
@@ -1424,6 +1488,88 @@ class PlugLoadType < EnumeratedElement
               "Business Equipment",
               "Other",
               "Unknown"]
+  end
+end
+
+class PumpApplication < EnumeratedElement
+  def specify_enums
+    @enums  ["Boiler",
+            "Chilled Water",
+            "Domestic Hot Water",
+            "Solar Hot Water",
+            "Condenser",
+            "Cooling Tower",
+            "Ground Loop",
+            "Pool",
+            "Recirculation",
+            "Process Hot Water",
+            "Process Cold Water",
+            "Potable Cold Water",
+            "Refrigerant",
+            "Air",
+            "Other",
+            "Unknown"]
+  end
+end
+
+class PumpConfiguration < EnumeratedElement
+  def specify_enums
+    @enums = ["Primary",
+              "Secondary",
+              "Tertiary",
+              "Backup",
+              "Other",
+              "Unknown"]
+  end
+end
+
+class PumpControlType < EnumeratedElement
+  def specify_enums
+    @enums = ["Constant Volume",
+              "Variable Volume",
+              "VFD",
+              "Multi-Speed",
+              "Other",
+              "Unknown"]
+  end
+end
+
+class PumpOperation < EnumeratedElement
+  def specify_enums
+    @enums = ["On Demand",
+              "Standby",
+              "Schedule",
+              "Other",
+              "Unknown"]
+  end
+end
+
+class PumpEfficiency < SimpleElement; end
+
+
+class PumpSystemType < SimpleElement
+  def specify_children
+    children = {}
+    children[:PumpEfficiency] = { required:false, value: nil }
+    children[:PumpControlType] = { required:false, value: nil }
+    children[:PumpOperation] = { required:false, value: nil }
+    children[:PumpingConfiguration] = { required:false, value: nil }
+    children[:PumpApplication] = { required:false, value: nil }
+    children[:Quantity] = { required:false, value: nil }
+    children[:LinkedSystemID] = { required:false, value: nil }
+    #TODO: Add more as required
+  end
+
+  def specify_attributes
+    attributes = {}
+    attributes[:ID] ={ required:false, text: nil }
+  end
+end
+
+class PumpSystems < SimpleElement
+  def specify_children 
+    @children = {}
+    @children[:PumpSystem] = { required:false, type:"PumpSystemType", value: [] }
   end
 end
 

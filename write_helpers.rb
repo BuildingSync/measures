@@ -15,6 +15,14 @@ class Helper
   end
 
 end
+
+class AirsideEconomizerHelper
+  attr_accessor :airside_economizer
+  def initialize(in_hash)
+
+  end
+end
+
 #is a master class that performs much of the dirty work and set up
 class AuditHelper
   attr_accessor :audit, :constructions
@@ -232,6 +240,13 @@ class FacilitiesHelper
   end
 end
 
+class FanSystemsHelper
+  attr_accessor :foundation_systems
+  def initialize(in_hash)
+
+  end
+end
+
 #this helper is only designed to help at the Facility Level, not the subsection level
 class FloorsAboveGradeHelper
   attr_accessor :floors_above_grade
@@ -444,12 +459,14 @@ class DuctSystemsHelper
 end
 
 class HVACSystemsHelper
-  attr_accessor :hvac_systems, :unique_hvac_systems, :air_loops, :plant_loops
+  attr_accessor :hvac_systems, :unique_hvac_systems, :air_loops, :plant_loops, :fan_systems, :pump_systems
   def initialize(model)
 
     @unique_hvac_systems = []
     @air_loops = []
     duct_system = nil
+    @fan_systems_arr = []
+    @pump_systems_arr = []
     begin
       bldg = model.getBuilding
       tzones = bldg.thermalZones()
@@ -1606,6 +1623,12 @@ class PlugLoadsHelper
 
 end
 
+class PumpSystemsHelper
+  attr_accessor :foundation_systems
+  def initialize(in_hash)
+
+  end
+end
 
 class SchedulesHelper
   attr_accessor :schedules
@@ -2420,22 +2443,6 @@ class GeoHelp
   #     return wid
   # end
 
-  def explainTry
-    begin 
-      a = 5 / 0
-    rescue
-      a = 0
-    ensure
-      #puts "i always run"
-    end
-  end
-
-
-  def explainTry2
-    a = 5/0
-  rescue
-    a = nil
-  end
 
 
 
