@@ -361,7 +361,7 @@ class DeliveryHelper
   attr_accessor :delivery
 
   #passes in a little hash that is unwrapped to make the delivery object
-  def initialize(in_hash, handle)
+  def initialize(in_hash, handle, econo_controller=nil)
     begin
       #puts in_hash.keys[0]
       if(in_hash.keys[0] == :FanBased)
@@ -391,12 +391,78 @@ class DeliveryHelper
         children[:CentralAirDistribution] = { value: cad }
         fbdt = FanBasedDistributionType.new(h)
 
+        econo_def = nil
+        if not econo_controller.nil?
+          #make economizer
+          h = {}
+          children = {}
+          attributes = {}
+          h[:children] = children
+          h[:attributes] = attributes
+          puts econo_controller.getEconomizerControlType
+          if econo_controller.getEconomizerControlType == "NoEconomizer" #TODO: can this be improved?
+            #do nothing
+          else
+            if econo_controller.getEconomizerControlType == "DifferentialEnthalpy" or econo_controller.getEconomizerControlType == "ElectronicEnthalpy" #TODO: what about DifferentialDryBulbAndEnthalpy
+              children[:AirSideEconomizerType] = { value: AirSideEconomizerType.new({ text: "Enthalpy" })}
+              if econo_controller.getEconomizerControlType == "DifferentialEnthalpy"
+                children[:EconomizerControl] = { value: EconomizerControl.new({ text: "Differential" }) }
+              else
+                children[:EconomizerControl] = { value: EconomizerControl.new({ text: "Fixed" }) }
+              end
+
+              enth = econo_controller.getEconomizerMaximumLimitEnthalpy
+              puts "Enthalpy", enth
+              if not enth.empty?
+                enth = enth.get
+                c = Conversions.new
+                enth = c.convertEnthalpy(enth)
+                puts "Converted enthalpy", enth
+                children[:EconomizerEnthalpyControlPoint] = { value: EconomizerEnthalpyControlPoint.new({text: enth.to_s })}
+              end
+
+
+
+            elsif econo_controller.getEconomizerControlType == "FixedDryBulb" or econo_controller.getEconomizerControlType == "DifferentialDryBulb" || econo_controller.getEconomizerControlType == "FixedDewPointAndDryBulb"
+              children[:AirSideEconomizerType] = { value: AirSideEconomizerType.new({ text: "Dry bulb temperature" })}
+              if econo_controller.getEconomizerControlType == "DifferentialDryBulb"
+                children[:EconomizerControl] = { value: EconomizerControl.new({ text: "Differential" }) }
+              else
+                children[:EconomizerControl] = { value: EconomizerControl.new({ text: "Fixed" }) }
+              end
+              db = econo_controller.getEconomizerMaximumLimitDryBulbTemperature
+              if not db.empty?
+                db = db.get
+                c = Conversions.new()
+                db = c.convertTemperature(db)
+                children[:EconomizerDryBulbControlPoint] = { value: EconomizerDryBulbControlPoint.new({text: db.to_s })}
+              end
+            else
+              children[:AirSideEconomizerType] = { value: AirSideEconomizerType.new({ text: "Other" })}
+              if econo_controller.getEconomizerControlType == "FixedDewPointAndDryBulb"
+                children[:EconomizerControl] = { value: EconomizerControl.new({ text: "Fixed" }) }
+                db = econo_controller.getEconomizerMaximumLimitDryBulbTemperature
+                if not db.empty?
+                  db = db.get
+                  c = Conversions.new()
+                  db = c.convertTemperature(db)
+                  children[:EconomizerDryBulbControlPoint] = { value: EconomizerDryBulbControlPoint.new({text: db.to_s })}
+                end
+              end
+            end
+            econo_def = AirSideEconomizer.new(h)  
+          end #end "No Ecomomizer if statement"
+        end
+
         h = {}
         children = {}
         attributes = {}
         h[:children] = children
         h[:attributes] = attributes
         children[:FanBasedDistributionType] = { value: fbdt }
+        if not econo_def.nil?
+          children[:AirSideEconomizer] = { value: econo_def }
+        end
         fb = FanBased.new(h)
 
         h = {}
@@ -558,6 +624,9 @@ class HVACSystemsHelper
                         raise "Unexpected situation: more than one boiler."
                       end
                     end
+                  elsif childs.to_CoilHeatingElectric.is_initialized
+                    coil = childs.to_CoilHeatingElectric
+                    @delivery_type[:FanBased][:CentralAirDistribution][:ReheatSource] = "Local electric resistance"
                   else
                     raise "Unexpected reheat coil type."
                   end
@@ -994,6 +1063,16 @@ class HVACSystemsHelper
           humidifier_steam_elec = aloop.supplyComponents(OpenStudio::Model::HumidifierSteamElectric::iddObjectType())
           hot_water_coil = aloop.supplyComponents(OpenStudio::Model::CoilHeatingWater::iddObjectType())
           chilled_water_coil = aloop.supplyComponents(OpenStudio::Model::CoilCoolingWater::iddObjectType())
+
+
+          oas = nil
+          if not aloop.airLoopHVACOutdoorAirSystem.empty?
+            oas = aloop.airLoopHVACOutdoorAirSystem.get
+            oas = oas.getControllerOutdoorAir
+          else
+            puts "Nor Outdoor Air System"
+          end
+
           if not dxcoil.empty?
             #make a dx coil cooling source
 
@@ -1040,7 +1119,7 @@ class HVACSystemsHelper
             #puts "Made Cooling source for 1 speed DX"
             #make delivery
             #NOTE, have not run across this yet
-            deliveries.push(DeliveryHelper.new(hvac_system[:delivery_type], aloop.handle.to_s).delivery)
+            deliveries.push(DeliveryHelper.new(hvac_system[:delivery_type], aloop.handle.to_s, oas).delivery)
 
           elsif not dxcoil_two_speed.empty?
 
@@ -1087,7 +1166,7 @@ class HVACSystemsHelper
             #puts "Made cooling source for 2 speed DX"
 
             #make delivery
-            deliveries.push(DeliveryHelper.new(hvac_system[:delivery_type], aloop.handle.to_s).delivery)
+            deliveries.push(DeliveryHelper.new(hvac_system[:delivery_type], aloop.handle.to_s, oas).delivery)
 
           elsif not gascoil.empty?
             h = {}
@@ -1111,7 +1190,7 @@ class HVACSystemsHelper
 
             #puts "Made gas coil heating source"
             #make delivery
-            deliveries.push(DeliveryHelper.new(hvac_system[:delivery_type], aloop.handle.to_s).delivery)
+            deliveries.push(DeliveryHelper.new(hvac_system[:delivery_type], aloop.handle.to_s,oas).delivery)
 
 
           elsif not elecheatcoil.empty?
@@ -1138,8 +1217,8 @@ class HVACSystemsHelper
 
             #puts "Made gas coil heating source"
             #make delivery
-            deliveries.push(DeliveryHelper.new(hvac_system[:delivery_type], aloop.handle.to_s).delivery)
-            #raise "An unexpected thing happened...an electric resistance coil on the supply side..." 
+            deliveries.push(DeliveryHelper.new(hvac_system[:delivery_type], aloop.handle.to_s, oas).delivery)
+
 
           elsif not unitary_sys.empty?
             #puts "Found unitary heat pump as a supply component."
@@ -1174,12 +1253,12 @@ class HVACSystemsHelper
 
             #puts "Made gas coil heating source"
             #make delivery
-            deliveries.push(DeliveryHelper.new(hvac_system[:delivery_type], aloop.handle.to_s).delivery)
+            deliveries.push(DeliveryHelper.new(hvac_system[:delivery_type], aloop.handle.to_s, oas).delivery)
 
           elsif not hot_water_coil.empty? and not chilled_water_coil.empty?
             #we have a custom air handler on our hands
             #don't have to define all of the heating and cooling sources as for the packaged units, this was done up above when filtering through the hwPlant and chePlant of the hvac_system passed
-            deliveries.push(DeliveryHelper.new(hvac_system[:delivery_type], aloop.handle.to_s).delivery)
+            deliveries.push(DeliveryHelper.new(hvac_system[:delivery_type], aloop.handle.to_s, oas).delivery)
           elsif not humidifier_steam_elec.empty?
             raise "Found humidifier steam electric"
           end
@@ -2096,12 +2175,12 @@ class SchedulesHelper
           else
             #find days not covered, and apply default for each day
             unique_days_covered = details_array.uniq { |p| p.children[:DayType][:value].text }
-            puts "Unique days covered", unique_days_covered.length
+            #puts "Unique days covered", unique_days_covered.length
             known_days = []
             unique_days_covered.each do |unique|
               if unique.children.has_key?(:DayType) #TODO: this occasionally happens, when this issue is resolved this if statement can be removed
                 known_days.push(unique.children[:DayType][:value].text)
-                puts unique.children[:DayType][:value].text
+                #puts unique.children[:DayType][:value].text
               else
                 known_days.push("AllWeek")
               end
@@ -2673,6 +2752,13 @@ class Conversions
   end
   def convertVolume(volume)
     return (volume / 0.3048 / 0.3048 / 0.3048).round(round_place)
+  end
+  def convertTemperature(temperature)
+    return temperature * 1.8 + 32
+  end
+  def convertEnthalpy(enthalpy)
+    #J/kg to Btu/lbm where 1 kj/kG is assumed to be 0.429923 Btu/lb or 1 Btu/lb = 2.326 kJ/kg
+    return enthalpy/1000/2.326
   end
 end
 

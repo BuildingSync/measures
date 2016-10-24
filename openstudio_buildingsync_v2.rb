@@ -259,6 +259,7 @@ class AirSideEconomizer < SimpleElement
     @children[:EconomizerControl] = { required: false, value: nil }
     @children[:EconomizerDryBulbControlPoint] = { required: false, value: nil }
     @children[:EconomizerEnthalpyControlPoint] = { required: false, value: nil }
+    @children[:EconomizerLowTemperatureLockout] = { required: false, value: nil }
     #TODO: Add More as required
   end
 end
@@ -694,6 +695,7 @@ end
 
 class EconomizerDryBulbControlPoint < SimpleElement; end
 class EconomizerEnthalpyControlPoint < SimpleElement; end
+class EconomizerLowTemperatureLockout < SimpleElement; end
 
 class Facilities < SimpleElement
   #initialize the Facility Children with a simple type or array
