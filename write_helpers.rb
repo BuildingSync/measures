@@ -25,146 +25,185 @@ end
 
 #is a master class that performs much of the dirty work and set up
 class AuditHelper
-  attr_accessor :audit, :constructions
+  attr_accessor :audit
 
   def initialize(os_model)
-    #make systems
-    #constructions
-    constructions = os_model.getConstructions
-    #puts constructions
-    #puts 
-    ch = ConstructionSystemsHelper.new()
-    ch.make_bs_constructions(constructions)
-    @constructions = ch
-    
+    begin
+      #make systems
+      #constructions
+      
+      #puts constructions
+      #puts 
 
-    h={}
-    children={}
-    h[:children] = children
-    children[:FenestrationSystems] = { value: ch.fenestration_systems }
-    children[:WallSystems] = { value: ch.wall_systems }
-    children[:RoofSystems] = { value: ch.roof_systems }
-    children[:FoundationSystems] = { value: ch.foundation_systems }
-    children[:CeilingSystems] = { value: ch.ceiling_systems}
+      h={}
+      children={}
+      attributes = {}
+      
+      #hash for all systems
+      h[:children] = children
+      h[:attributes] = attributes
+      ch = ConstructionSystemsHelper.new(os_model)
 
-    lh = LightingSystemsHelper.new(os_model)
-    children[:LightingSystems] = { value: lh.lighting_systems }
-    plh = PlugLoadsHelper.new(os_model)
-    children[:PlugLoads] = { value: plh.plug_loads}
+      children[:FenestrationSystems] = { value: ch.fenestration_systems }
+      children[:WallSystems] = { value: ch.wall_systems }
+      children[:RoofSystems] = { value: ch.roof_systems }
+      children[:FoundationSystems] = { value: ch.foundation_systems }
+      children[:CeilingSystems] = { value: ch.ceiling_systems}
 
-    #HVAC Systems
-    hvac = HVACSystemsHelper.new(os_model)
-   #puts hvac.hvac_systems.children
-    children[:HVACSystems] = { value: hvac.hvac_systems }
+      lh = LightingSystemsHelper.new(os_model)
+      children[:LightingSystems] = { value: lh.lighting_systems }
+      plh = PlugLoadsHelper.new(os_model)
+      children[:PlugLoads] = { value: plh.plug_loads}
 
-    sys = Systems.new(h);
-    #make schedules
-    os_schedules = os_model.getSchedules
-    scheds = SchedulesHelper.new(os_schedules)
+      #HVAC Systems
+      hvac = HVACSystemsHelper.new(os_model)
+     #puts hvac.hvac_systems.children
+      children[:HVACSystems] = { value: hvac.hvac_systems }
 
-    #make site
-    sh = SiteHelper.new(os_model)
-    h={}
-    children={}
-    attributes = {}
-    h[:children] = children
-    h[:attributes] = attributes
-    attributes[:ID] = { value: "Site-1" }
-    site = SiteType.new(h)
-    #make sites
-    h={}
-    children={}
-    h[:children] = children
-    children[:Site] = { value: [sh.site] }
-    sites = Sites.new(h)
+      #TODO, test adding a proper hash of hvac plant handles and BuildingSync PlantLoop ids
+      pumps = PumpSystemsHelper.new(os_model, {})
+      children[:PumpSystems] = { value: pumps.pump_systems }
 
-    
-    #make Audit
-    h={}
-    children={}
-    attributes={}
-    h[:children] = children
-    h[:attributes] = attributes
-    children[:Sites] = { value: sites }
-    children[:Systems] = { value: sys }
-    attributes[:ID] = { value:"Audit_1" }
-    @audit = Audit.new(h)
-    
+      #TODO, test adding a proper hash of hvac plant handles and BuildingSync PlantLoop ids
+      fans = FanSystemsHelper.new(os_model,{})
+      children[:FanSystems] = { value: fans.fan_systems }
 
+      #puts "Making Systems Instance"
+      sys = Systems.new(h);
+      #make schedules
+      scheds = SchedulesHelper.new(os_model)
+
+      #make site
+      sh = SiteHelper.new(os_model)
+      h={}
+      children={}
+      attributes = {}
+      h[:children] = children
+      h[:attributes] = attributes
+      attributes[:ID] = { value: "Site-1" }
+      site = SiteType.new(h)
+      #make sites
+      h={}
+      children={}
+      h[:children] = children
+      children[:Site] = { value: [sh.site] }
+      sites = Sites.new(h)
+
+      
+      #make Audit
+      h={}
+      children={}
+      attributes={}
+      h[:children] = children
+      h[:attributes] = attributes
+      children[:Sites] = { value: sites }
+      children[:Systems] = { value: sys }
+      children[:Schedules] = { value: scheds.schedules }
+      attributes[:ID] = { value:"Audit_1" }
+      @audit = Audit.new(h)
+    rescue => error
+      puts "Could not create the Audit node properly"
+      puts error.inspect, error.backtrace
+      h={}
+      children={}
+      attributes={}
+      h[:children] = children
+      h[:attributes] = attributes
+      @audit = Audit.new(h)
+    ensure
+      
+    end
   end
 end
 
 class ConstructionSystemsHelper
   attr_accessor :wall_systems, :roof_systems, :foundation_systems, :ceiling_systems, :fenestration_systems 
 
-  def initialize; end
-  def make_bs_constructions(constructions)
-    wallsystems = []
-    roofsystems = []
-    foundations = []
-    ceilsystems = []
-    windsystems = []
+  def initialize(os_model)
+    begin
+      constructions = os_model.getConstructions
+      wallsystems = []
+      roofsystems = []
+      foundations = []
+      ceilsystems = []
+      windsystems = []
 
-    constructions.each do |construction|
-      #puts("#{construction}")
-      #determine construction type (Wall, Roof, Ceiling, Foundation, Window)
-      #createConstruction based on type
-      if not construction.name.empty?
+      constructions.each do |construction|
+        #puts("#{construction}")
+        #determine construction type (Wall, Roof, Ceiling, Foundation, Window)
+        #createConstruction based on type
+        if not construction.name.empty?
 
-        res = self.determine_type_from_name(construction)
-        if(res.class.name == "WallSystemType")
-          wallsystems.push(res)
-          #puts("Made Wall")
-        elsif(res.class.name == "CeilingSystemType")
-          ceilsystems.push(res)
-          #puts("Made Ceiling")
-        elsif(res.class.name == "FoundationSystemType")
-          foundations.push(res)
-          #puts("Made Foundation")
-        elsif(res.class.name == "RoofSystemType")
-          roofsystems.push(res)
-          #puts("Made Roof")
-        elsif(res.class.name == "FenestrationSystemType")
-          windsystems.push(res)
-          #puts("Made Fenestration")
+          res = self.determine_type_from_name(construction)
+          if(res.class.name == "WallSystemType")
+            wallsystems.push(res)
+            #puts("Made Wall")
+          elsif(res.class.name == "CeilingSystemType")
+            ceilsystems.push(res)
+            #puts("Made Ceiling")
+          elsif(res.class.name == "FoundationSystemType")
+            foundations.push(res)
+            #puts("Made Foundation")
+          elsif(res.class.name == "RoofSystemType")
+            roofsystems.push(res)
+            #puts("Made Roof")
+          elsif(res.class.name == "FenestrationSystemType")
+            windsystems.push(res)
+            #puts("Made Fenestration")
+          else
+            #warning
+          end
         else
           #warning
         end
-      else
-        #warning
       end
+      #puts("Wall Systems: #{wallsystems.length}")
+      #puts("Ceiling Systems: #{ceilsystems.length}")
+      #puts("Foundation Systems: #{foundations.length}")
+      #puts("Roof Systems: #{roofsystems.length}")
+      #puts("Fenestration Systems: #{windsystems.length}")
+      h = {}
+      children = {}
+      h[:children] = children
+      children[:WallSystem] = { value: wallsystems };
+      #puts "Creating Instance of WallSystems"
+      @wall_systems = WallSystems.new(h)
+      h = {}
+      children = {}
+      h[:children] = children
+      children[:CeilingSystem] = { value: ceilsystems };
+      @ceiling_systems = CeilingSystems.new(h)
+      h = {}
+      children = {}
+      h[:children] = children
+      children[:FoundationSystem] = { value: foundations };
+      @foundation_systems = FoundationSystems.new(h)
+      h = {}
+      children = {}
+      h[:children] = children
+      children[:RoofSystem] =  { value: roofsystems };
+      @roof_systems = RoofSystems.new(h)
+      h = {}
+      children = {}
+      h[:children] = children
+      children[:FenestrationSystem] = { value: windsystems };
+      @fenestration_systems = FenestrationSystems.new(h)
+    rescue => error
+      puts "Could not create some part of ConstructionSystems nodes properly"
+      puts error.inspect, error.backtrace
+      h = {}
+      children = {}
+      h[:children] = children
+      @wall_systems = WallSystems.new(h)
+      @ceiling_systems = CeilingSystems.new(h)
+      @foundation_systems = FoundationSystems.new(h)
+      @roof_systems = RoofSystems.new(h)
+      @fenestration_systems = FenestrationSystems.new(h)
+    ensure
+
     end
-    #puts("Wall Systems: #{wallsystems.length}")
-    #puts("Ceiling Systems: #{ceilsystems.length}")
-    #puts("Foundation Systems: #{foundations.length}")
-    #puts("Roof Systems: #{roofsystems.length}")
-    #puts("Fenestration Systems: #{windsystems.length}")
-    h = {}
-    children = {}
-    h[:children] = children
-    children[:WallSystem] = { required:  false, type:  "WallSystemType",value: wallsystems };
-    self.wall_systems = WallSystems.new(h)
-    h = {}
-    children = {}
-    h[:children] = children
-    children[:CeilingSystem] = { required:  false, type:  "CeilingSystemType",value: ceilsystems };
-    self.ceiling_systems = CeilingSystems.new(h)
-    h = {}
-    children = {}
-    h[:children] = children
-    children[:FoundationSystem] = { required:  false, type:  "FoundationSystemType",value: foundations };
-    self.foundation_systems = FoundationSystems.new(h)
-    h = {}
-    children = {}
-    h[:children] = children
-    children[:RoofSystem] = { required:  false, type:  "RoofSystemType",value: roofsystems };
-    self.roof_systems = RoofSystems.new(h);
-    h = {}
-    children = {}
-    h[:children] = children
-    children[:FenestrationSystem] = { required:  false, type:  "FenestrationSystemType",value: windsystems };
-    self.fenestration_systems = FenestrationSystems.new(h)
   end
+
   #return is based on the string evaluation
   def determine_type_from_name(construction)
     name = construction.name.get
@@ -213,39 +252,46 @@ end
 class FacilitiesHelper
   attr_accessor :facilities
   def initialize(model)
-    os_bldg = model.getBuilding
-    #puts os_bldg
-    fah = FloorAreasHelper.new(Conversions.new().convertArea(os_bldg.floorArea))
-    
-    ss = SubsectionsHelper.new(model)
+    begin
+      os_bldg = model.getBuilding
+      #puts os_bldg
+      fah = FloorAreasHelper.new(Conversions.new().convertArea(os_bldg.floorArea))
+      
+      ss = SubsectionsHelper.new(model)
 
-    h={}
-    children={}
-    attributes = {}
-    h[:children] = children
-    h[:attributes] = attributes
-    attributes[:ID] = { value: "Facility-1" }
-    children[:FloorAreas] = { value: fah.floor_areas }
-    children[:Subsections] = { value: ss.subsections }
+      h={}
+      children={}
+      attributes = {}
+      h[:children] = children
+      h[:attributes] = attributes
+      attributes[:ID] = { value: "Facility-1" }
+      children[:FloorAreas] = { value: fah.floor_areas }
+      children[:Subsections] = { value: ss.subsections }
 
-    facility = FacilityType.new(h)
+      facility = FacilityType.new(h)
 
-    h={}
-    children={}
-    attributes = {}
-    h[:children] = children
-    h[:attributes] = attributes
-    children[:Facility] = { value: [facility] }
-    @facilities = Facilities.new(h)
+      h={}
+      children={}
+      attributes = {}
+      h[:children] = children
+      h[:attributes] = attributes
+      children[:Facility] = { value: [facility] }
+      @facilities = Facilities.new(h)
+    rescue => error
+      puts "Could not create the Facilities node properly"
+      puts error.inspect, error.backtrace
+      h={}
+      children={}
+      attributes = {}
+      h[:children] = children
+      h[:attributes] = attributes
+      @facilities = Facilities.new(h)
+    ensure
+
+    end
   end
 end
 
-class FanSystemsHelper
-  attr_accessor :foundation_systems
-  def initialize(in_hash)
-
-  end
-end
 
 #this helper is only designed to help at the Facility Level, not the subsection level
 class FloorsAboveGradeHelper
@@ -266,36 +312,48 @@ end
 class FloorAreasHelper
   attr_accessor :floor_areas
   def initialize(area, fully_Conditioned=false)
-    #puts "Making Floor Areas"
+    begin
+      #puts "Making Floor Areas"
 
-    #make floor Areas Object
-    h = {}
-    children = {}
-    h[:children] = children
-    fgross = FloorAreaType.new({ text: "Gross" })
-    fgross_val = FloorAreaValue.new({ text: area })
-    children[:FloorAreaType] = { value: fgross } 
-    children[:FloorAreaValue] = { value: fgross_val}
-    farea_1 = FloorArea.new(h)
+      #make floor Areas Object
+      h = {}
+      children = {}
+      h[:children] = children
+      fgross = FloorAreaType.new({ text: "Gross" })
+      fgross_val = FloorAreaValue.new({ text: area })
+      children[:FloorAreaType] = { value: fgross } 
+      children[:FloorAreaValue] = { value: fgross_val}
+      farea_1 = FloorArea.new(h)
 
-    # h = {}
-    # children = {}
-    # h[:children] = children
-    # fcon = FloorAreaType.new({ text: "Conditioned" })
-    # fcon_val = FloorAreaValue.new({ text: area })
-    # children[:FloorAreaType] = { value: fcon } 
-    # children[:FloorAreaValue] = { value: fcon_val}
-    # farea_2 = FloorArea.new(h)
-    
+      # h = {}
+      # children = {}
+      # h[:children] = children
+      # fcon = FloorAreaType.new({ text: "Conditioned" })
+      # fcon_val = FloorAreaValue.new({ text: area })
+      # children[:FloorAreaType] = { value: fcon } 
+      # children[:FloorAreaValue] = { value: fcon_val}
+      # farea_2 = FloorArea.new(h)
+      
 
-    #make FloorAreas Wrapper
-    h = {}
-    children = {}
-    h[:children] = children
-    children[:FloorArea] = { value: [farea_1] }
-    fas = FloorAreas.new(h)
-    
-    @floor_areas = fas
+      #make FloorAreas Wrapper
+      h = {}
+      children = {}
+      h[:children] = children
+      children[:FloorArea] = { value: [farea_1] }
+      fas = FloorAreas.new(h)
+      
+      @floor_areas = fas
+    rescue => error
+      puts "Could not create the FloorAreas node properly"
+      puts error.inspect, error.backtrace
+      h = {}
+      children = {}
+      h[:children] = children
+      children[:FloorArea] = { value: [farea_1] }
+      fas = FloorAreas.new(h)
+    ensure
+      return fas
+    end
   end
 end
 
@@ -363,7 +421,7 @@ class DeliveryHelper
         raise "Unanticipated or new delivery method encountered that has yet to be added to the version."
       end
     rescue => error
-      puts "Could not create the delivery element properly"
+      puts "Could not create the Delivery Node properly"
       puts error.inspect, error.backtrace
     ensure
       #do nothing for now
@@ -433,24 +491,28 @@ class DuctSystemsHelper
         ds = DuctSystemType.new(h)
         duct_systems_arr.push(ds)
       end
-      # h = {}
-      # children = {}
-      # attributes = {}
-      # h[:children] = children
-      # h[:attributes] = attributes
-      # #hash alread defined globally at the top of initialize
-      # children[:DuctSystem] = { value: duct_systems_arr }
-      # @duct_systems = DuctSystems.new(h)
+      h = {}
+      children = {}
+      attributes = {}
+      h[:children] = children
+      h[:attributes] = attributes
+      #hash alread defined globally at the top of initialize
+      children[:DuctSystem] = { value: duct_systems_arr }
+      @duct_systems = DuctSystems.new(h)
       #puts "Successfully created Duct systems"
       #puts duct_systems_arr[0].children
 
     rescue => error
-      puts "Could not create the DuctSystems element properly"
+      puts "Could not create the DuctSystems node properly"
       puts error.inspect, error.backtrace
-    ensure
-      children[:DuctSystem] = { type:"DuctSystemType" , value: duct_systems_arr }
-      #puts h.inspect
+      h = {}
+      children = {}
+      attributes = {}
+      h[:children] = children
+      h[:attributes] = attributes
+      children[:DuctSystem] = { value: duct_systems_arr }
       @duct_systems = DuctSystems.new(h)
+    ensure
       #puts @ductsystems
     end
   end
@@ -465,8 +527,6 @@ class HVACSystemsHelper
     @unique_hvac_systems = []
     @air_loops = []
     duct_system = nil
-    @fan_systems_arr = []
-    @pump_systems_arr = []
     begin
       bldg = model.getBuilding
       tzones = bldg.thermalZones()
@@ -578,8 +638,8 @@ class HVACSystemsHelper
                     end
                   end
                 else
-                  puts unique
-                  puts hvac_system
+                  #puts unique
+                  #puts hvac_system
                   raise "Error, hvac system definition is incorrect.  Check your definition of your HVAC system and make sure all keys are present and accounted for"  
                 end
               end
@@ -807,7 +867,7 @@ class HVACSystemsHelper
   end
 
   def makeHeatingAndCoolingSystem(model, hvac_system)
-    puts hvac_system
+    #puts hvac_system
     #puts hvac_system[:hwPlant].nil?
     hch = {}
     hcchildren = {}
@@ -916,10 +976,8 @@ class HVACSystemsHelper
         h[:children] = children
         h[:attributes] = attributes
         children[:CoolingSourceType] = { value: hstype }
-        children[:CoolingMedium] = { value: HeatingMedium.new({ text: "Hot water" }) } #this is a hard one, isn't the medium of the boiler water, but the coil air?
-        #children[:PrimaryFuel] = { value: FuelTypes.new( { text: "Natural gas" }) } #TODO, un-hardcode this to point to the boilers in question...which is possible through model and guids. #TODO: talk with Nick because this messes up the XML serializer
-        children[:Quantity] = { value: Quantity.new({ text: "1" }) } #TODO, un-hardcode this to point into the boiler system definition
-        #puts "Heating source hash #{h}"
+        children[:CoolingMedium] = { value: CoolingMedium.new({ text: "Chilled water" }) } #this is a hard one, isn't the medium of the chiller water, but the coil air?
+        #children[:PrimaryFuel] = { value: FuelTypes.new( { text: "Electricity" }) } #TODO, un-hardcode this to point to the boilers in question...which is possible through model and guids. #TODO: talk with Nick because this messes up the XML serializer
         attributes[:ID] = { value: "Cool_Source_"+hvac_system[:chwPlant].to_s}
         coolingsources.push(CoolingSource.new(h))
       end
@@ -979,7 +1037,7 @@ class HVACSystemsHelper
             attributes[:ID] = { value: "Cooling_Source_"+aloop.handle.to_s }
 
             coolingsources.push(CoolingSource.new(h))
-            puts "Made Cooling sourcr for 1 speed DX"
+            #puts "Made Cooling source for 1 speed DX"
             #make delivery
             #NOTE, have not run across this yet
             deliveries.push(DeliveryHelper.new(hvac_system[:delivery_type], aloop.handle.to_s).delivery)
@@ -1188,7 +1246,7 @@ class HVACSystemsHelper
       end
       return nil
     else
-      puts "Making condenser plant objects"
+      #puts "Making condenser plant objects"
       condenser_plants = []
       @plant_loops.each do |plantloop|
         if plantloop.handle.to_s == handle
@@ -1250,13 +1308,9 @@ class HVACSystemsHelper
               raise "A new condenser plant type has been encountered.  This is a new system type that has not been designed in this version of OS to BuildingSync XML."
             end
 
-            if not pump_variable.empty?
-              puts "Found variable speed pump for condenser loop."
-            else
-              raise "A new condenser plant pump type has been encountered.  This is a new system type that has not been designed in this version of OS to BuildingSync XML."
-            end
-
-          rescue
+          rescue => error
+            puts "Could not create CondenserPlant properly"
+            puts error.inspect, error.backtrace
             puts "Rescuing condenser loop creation"
             h = {}
             children = {}
@@ -1285,10 +1339,10 @@ class HVACSystemsHelper
         #puts "potential found?", !potential.empty?, potential
         if not potential.empty?
           x = potential[0].handle
-          puts "Got handle", x
-          puts "Passed handle", handle
+          #puts "Got handle", x
+          #puts "Passed handle", handle
           if x.to_s == handle.to_s
-            puts "handles match"
+            #puts "handles match"
             h = {}
             attributes = {}
             h[:attributes] = attributes
@@ -1306,19 +1360,21 @@ class HVACSystemsHelper
       h[:children] = children
       h[:attributes] = attributes
       children[:CondenserPlantID] = { value: plantIds }
-      puts h
+      #puts h
       condenserIds = CondenserPlantIDs.new(h)
-      puts "Successfully made condenserIds:", condenserIds
-    rescue
+      #puts "Successfully made condenserIds:", condenserIds
+    rescue => error
+      puts "Could not get CondenserPlantIDs properly"
+      puts error.inspect, error.backtrace
       h = {}
       children = {}
       attributes = {}
       h[:children] = children
       h[:attributes] = attributes
       children[:CondenserPlantID] = { value: [] }
-      puts h
+      #puts h
       condenserIds = CondenserPlantIDs.new(h)
-      puts "Unsuccessfully made condenserIds:", condenserIds
+      #puts "Unsuccessfully made condenserIds:", condenserIds
     ensure
       return condenserIds
     end
@@ -1340,14 +1396,14 @@ class HVACSystemsHelper
           chiller = model.getObject(chillerHandle)
           
           c = chiller.get.to_ChillerElectricEIR.get
-          puts c.referenceCOP
+          #puts c.referenceCOP
           condenserType = c.condenserType
-          puts condenserType
+          #puts condenserType
 
           condenserPlantIDs = []
           if(condenserType == "WaterCooled")
             condenserPlantIDs = getCondenserPlantIDs(chillerHandle, type)
-            puts "Condenser plant Ids", condenserPlantIDs
+            #puts "Condenser plant Ids", condenserPlantIDs
           else
             raise "A new condenser plant type has been encountered.  This is a new system type that has not been designed in this version of OS to BuildingSync XML."
           end
@@ -1364,8 +1420,8 @@ class HVACSystemsHelper
           children[:ChilledWaterSupplyTemperature] = { value: ChilledWaterSupplyTemperature.new({ text: c.referenceLeavingChilledWaterTemperature }) }
           children[:Quantity] = { value: Quantity.new({ text: 1 }) } #TODO, how to extend beyond one, more complex plants?
           children[:CondenserPlantIDs] = { value: condenserPlantIDs }
-          puts "Made CondenserPlantIDs", h[:children][:CondenserPlantIDs]
-          
+          #puts "Made CondenserPlantIDs", h[:children][:CondenserPlantIDs]
+          #puts "Chiller hash", h
           chiller = Chiller.new(h)
 
           h = {}
@@ -1378,7 +1434,9 @@ class HVACSystemsHelper
 
           cpt = CoolingPlantType.new(h);
 
-        rescue
+        rescue => error
+          puts "Could not create the CoolingPlant properly"
+          puts error.inspect, error.backtrace
           h = {}
           children = {}
           attributes = {}
@@ -1386,7 +1444,7 @@ class HVACSystemsHelper
           h[:attributes] = attributes
           attributes[:ID] =  { value: "undefined-coolingplant"}
           cpt = CoolingPlantType.new(h)
-          throw "An error occurred making the Cooling Plant for plant handle #{handle}"
+          #throw "An error occurred making the Cooling Plant for plant handle #{handle}"
         ensure
           return cpt
         end
@@ -1416,8 +1474,8 @@ class HVACSystemsHelper
             children[:CapacityUnits] = { value: CapacityUnits.new({ text: "kW"}) }
           end
 
-          #TODO: figure out why this is not working
-         #puts b.designWaterOutletTemperature.get
+          #TODO: figure out why this is not working with NREL personnel
+          #puts b.designWaterOutletTemperature.get
           #children[:BoilerLWT] = { value: BoilerLWT.new({ text: b.designWaterOutletTemperature.get.to_s })}
           boiler = Boiler.new(h)
           #puts boiler
@@ -1431,7 +1489,9 @@ class HVACSystemsHelper
           hpt = HeatingPlantType.new(h)
           #puts "Returning heating plant type #{hpt}"
 
-        rescue
+        rescue => error
+          puts "Could not create the HeatingPlant properly"
+          puts error.inspect, error.backtrace
           h = {}
           children = {}
           attributes = {}
@@ -1439,8 +1499,7 @@ class HVACSystemsHelper
           h[:attributes] = attributes
           attributes[:ID] =  { text: "undefined-heatingplant"}
           hpt = HeatingPlantType.new(h)
-          throw "An error occurred making the Heating Plant for plant handle #{handle}"
-
+          #throw "An error occurred making the Heating Plant for plant handle #{handle}"
         ensure
          #puts "Ensuring in case"
           return hpt
@@ -1457,67 +1516,81 @@ end
 class LightingSystemsHelper
   attr_accessor :lighting_systems
   def initialize(model)
-    #currently the initialization method is designed to create one lighting system for each space
-    lightingsystems = []
-    model.getSpaces.each do |os_space|
-      #puts " #{os_space.thermalZone.get.equipment}"
+    begin
+      #currently the initialization method is designed to create one lighting system for each space
+      lightingsystems = []
+      model.getSpaces.each do |os_space|
+        #puts " #{os_space.thermalZone.get.equipment}"
+        h={}
+        children = {}
+        attributes = {}
+        h[:children] = children
+        h[:attributes] = attributes
+        attributes[:ID] = { value: os_space.handle.to_s + "-lighting" }
+        children[:InstalledPower] = { value: InstalledPower.new({ text: os_space.lightingPower.round(3) })}
+        children[:Location] = { value: Location.new({ text: "Interior" })}
+
+        #linked premises
+        #at a minimum, we want the space object which contains a linked space id and a set of schedules
+        #work inside out, schedules, space id, and then linked premises
+        lsh = {}
+        lchildren = {}
+        lattributes = {}
+        lsh[:children] = lchildren
+        lsh[:attributes] = lattributes
+        lattributes[:IDref] = { value: os_space.handle.to_s }
+        lsid = LinkedSpaceID.new(lsh)
+       #puts lsid
+
+        sh = {}
+        schildren = {}
+        sattributes = {}
+        sh[:children] = schildren
+        sh[:attributes] = sattributes
+        lsidarray = []
+        lsidarray.push(lsid)
+        schildren[:LinkedSpaceID] = { value: lsidarray }
+       #puts sh
+        sp = Space.new(sh)
+       #puts sp
+
+        lph = {}
+        lphchildren = {}
+        lphattributes = {}
+        lph[:children] = lphchildren
+        lph[:attributes] = lphattributes
+        lphchildren[:Space] = { value: sp } #space is child of LinkedPremises
+        lp = LinkedPremises.new(lph)
+       #puts lp
+
+        children[:LinkedPremises] = { value: lp } #LinkedPremises is child of LightingSystemType
+        # os_space.thermalZone.get.equipment.each do |equip|
+        #  #puts "#{equip}"
+        # end
+        lstype = LightingSystemType.new(h)
+        lightingsystems.push(lstype)
+      end
       h={}
       children = {}
       attributes = {}
       h[:children] = children
       h[:attributes] = attributes
-      attributes[:ID] = { value: os_space.handle.to_s + "-lighting" }
-      children[:InstalledPower] = { value: InstalledPower.new({ text: os_space.lightingPower.round(3) })}
-      children[:Location] = { value: Location.new({ text: "Interior" })}
+      children[:LightingSystem] = { value: lightingsystems }
 
-      #linked premises
-      #at a minimum, we want the space object which contains a linked space id and a set of schedules
-      #work inside out, schedules, space id, and then linked premises
-      lsh = {}
-      lchildren = {}
-      lattributes = {}
-      lsh[:children] = lchildren
-      lsh[:attributes] = lattributes
-      lattributes[:IDref] = { value: os_space.handle.to_s }
-      lsid = LinkedSpaceID.new(lsh)
-     #puts lsid
-
-      sh = {}
-      schildren = {}
-      sattributes = {}
-      sh[:children] = schildren
-      sh[:attributes] = sattributes
-      lsidarray = []
-      lsidarray.push(lsid)
-      schildren[:LinkedSpaceID] = { value: lsidarray }
-     #puts sh
-      sp = Space.new(sh)
-     #puts sp
-
-      lph = {}
-      lphchildren = {}
-      lphattributes = {}
-      lph[:children] = lphchildren
-      lph[:attributes] = lphattributes
-      lphchildren[:Space] = { value: sp } #space is child of LinkedPremises
-      lp = LinkedPremises.new(lph)
-     #puts lp
-
-      children[:LinkedPremises] = { value: lp } #LinkedPremises is child of LightingSystemType
-      # os_space.thermalZone.get.equipment.each do |equip|
-      #  #puts "#{equip}"
-      # end
-      lstype = LightingSystemType.new(h)
-      lightingsystems.push(lstype)
+      @lighting_systems = LightingSystems.new(h)
+    rescue => error
+      puts "Could not create the LightingSystems properly"
+      puts error.inspect, error.backtrace
+      #throw "An error occurred making LightingSystems"
+    ensure
+      h = {}
+      children = {}
+      attributes = {}
+      h[:children] = children
+      h[:attributes] = attributes
+      attributes[:ID] =  { text: "undefined-lightingSystem"}
+      hpt = LightingSystems.new(h)
     end
-    h={}
-    children = {}
-    attributes = {}
-    h[:children] = children
-    h[:attributes] = attributes
-    children[:LightingSystem] = { value: lightingsystems }
-
-    @lighting_systems = LightingSystems.new(h)
   end
 end
 
@@ -1562,312 +1635,670 @@ class PlugLoadsHelper
   attr_accessor :plug_loads
   def initialize(model)
     plugsystems = []
-    model.getSpaces.each do |os_space|
-      #puts " #{os_space.thermalZone.get.equipment}"
+    begin
+
+      model.getSpaces.each do |os_space|
+        #puts " #{os_space.thermalZone.get.equipment}"
+        h={}
+        children = {}
+        attributes = {}
+        h[:children] = children
+        h[:attributes] = attributes
+        attributes[:ID] = { value: os_space.handle.to_s + "-plugs" }
+        #puts "Plug power #{os_space.electricEquipmentPower}"
+        #children[:PlugLoadNominalPower] = { value: PlugLoadNominalPower.new({ text: os_space.electricEquipmentPower.round(3) }) }
+        children[:Location] = { value: Location.new({ text: "Interior" })}
+        children[:PlugLoadType] = { value: PlugLoadType.new({ text: "Unknown" }) }
+        #linked premises
+        #at a minimum, we want the space object which contains a linked space id and a set of schedules
+        #work inside out, schedules, space id, and then linked premises
+
+        lsh = {}
+        lchildren = {}
+        lattributes = {}
+        lsh[:children] = lchildren
+        lsh[:attributes] = lattributes
+        lattributes[:IDref] = { value: os_space.handle.to_s }
+        lsid = LinkedSpaceID.new(lsh)#puts lsid
+
+        sh = {}
+        schildren = {}
+        sattributes = {}
+        sh[:children] = schildren
+        sh[:attributes] = sattributes
+        lsidarray = []
+        lsidarray.push(lsid)
+        schildren[:LinkedSpaceID] = { value: lsidarray }#puts sh
+        sp = Space.new(sh)#puts sp
+
+        lph = {}
+        lphchildren = {}
+        lphattributes = {}
+        lph[:children] = lphchildren
+        lph[:attributes] = lphattributes
+        lphchildren[:Space] = { value: sp } #space is child of LinkedPremises
+        lp = LinkedPremises.new(lph)#puts lp
+
+        children[:LinkedPremises] = { value: lp } #LinkedPremises is child of LightingSystemType
+        # os_space.thermalZone.get.equipment.each do |equip|
+        #puts "#{equip}"
+        # end
+        lstype = PlugLoad.new(h)
+        plugsystems.push(lstype)
+      end
       h={}
       children = {}
       attributes = {}
       h[:children] = children
       h[:attributes] = attributes
-      attributes[:ID] = { value: os_space.handle.to_s + "-plugs" }
-      #puts "Plug power #{os_space.electricEquipmentPower}"
-      #children[:PlugLoadNominalPower] = { value: PlugLoadNominalPower.new({ text: os_space.electricEquipmentPower.round(3) }) }
-      children[:Location] = { value: Location.new({ text: "Interior" })}
-      children[:PlugLoadType] = { value: PlugLoadType.new({ text: "Unknown" }) }
-      #linked premises
-      #at a minimum, we want the space object which contains a linked space id and a set of schedules
-      #work inside out, schedules, space id, and then linked premises
+      children[:PlugLoad] = { value: plugsystems }
 
-      lsh = {}
-      lchildren = {}
-      lattributes = {}
-      lsh[:children] = lchildren
-      lsh[:attributes] = lattributes
-      lattributes[:IDref] = { value: os_space.handle.to_s }
-      lsid = LinkedSpaceID.new(lsh)#puts lsid
+      @plug_loads = PlugLoads.new(h)
+    rescue => error
+      puts "Could not create the PlugLoads Node properly"
+      puts error.inspect, error.backtrace
 
-      sh = {}
-      schildren = {}
-      sattributes = {}
-      sh[:children] = schildren
-      sh[:attributes] = sattributes
-      lsidarray = []
-      lsidarray.push(lsid)
-      schildren[:LinkedSpaceID] = { value: lsidarray }#puts sh
-      sp = Space.new(sh)#puts sp
-
-      lph = {}
-      lphchildren = {}
-      lphattributes = {}
-      lph[:children] = lphchildren
-      lph[:attributes] = lphattributes
-      lphchildren[:Space] = { value: sp } #space is child of LinkedPremises
-      lp = LinkedPremises.new(lph)#puts lp
-
-      children[:LinkedPremises] = { value: lp } #LinkedPremises is child of LightingSystemType
-      # os_space.thermalZone.get.equipment.each do |equip|
-      #puts "#{equip}"
-      # end
-      lstype = PlugLoad.new(h)
-      plugsystems.push(lstype)
-    end
-    h={}
-    children = {}
-    attributes = {}
-    h[:children] = children
-    h[:attributes] = attributes
-    children[:PlugLoad] = { value: plugsystems }
-
-    @plug_loads = PlugLoads.new(h)
-  end
-
-end
-
-class PumpSystemsHelper
-  attr_accessor :foundation_systems
-  def initialize(in_hash)
-
-  end
-end
-
-class SchedulesHelper
-  attr_accessor :schedules
-
-  def initialize(os_schedules) 
-    #make building sync schedules array
-    schedules_h = {}
-    schedules_children = {}
-    schedules_attributes = {}
-    schedules_h[:children] = schedules_children
-    schedules_h[:attributes] = schedules_attributes
-
-    os_schedules.each do |os_schedule|
-      #make a ScheduleType
-      h = {}
+      h={}
       children = {}
       attributes = {}
       h[:children] = children
       h[:attributes] = attributes
-      attributes[:ID] = { :value => os_schedule.handle.to_s }
-      #puts os_schedule
+      children[:PlugLoad] = { value: plugsystems }
 
-      if not os_schedule.to_ScheduleRuleset.empty?
-        rules = os_schedule.to_ScheduleRuleset.get.scheduleRules
-        
-        start_date = nil
-        end_date= nil
-        ruleset_name = nil
-        detailsvector = []
-        h_details = {}
-        h_details[:children] = {}
-        h_details[:attributes] = {}
+      @plug_loads = PlugLoads.new(h)
+    ensure
 
-        rules.each do |rule|
-          if not rule.startDate.empty?
-            if(start_date.nil?)
-              children[:SchedulePeriodBeginDate] = SchedulePeriodBeginDate.new(text: rule.startDate.get)
-              start_date = rule.startDate.get
-            elsif(rule.startDate.get != start_date)
-              detailsvector.push(ScheduleDetails.new({ children: h_details[:children] })) #set the details vector
-              children[:ScheduleDetails] = { value: detailsvector }
-
-              children[:SchedulePeriodBeginDate] = SchedulePeriodBeginDate.new(text: rule.startDate.get) #start over again
-              start_date = rule.startDate.get
-              detailsvector = Array.new
-            else
-              #don't make anything new
-            end
-          else
-            #TODO: #put some error there is no start date
-          end
-          if not rule.endDate.empty?
-            if(end_date.nil?)
-              children[:SchedulePeriodEndDate] = SchedulePeriodEndDate.new(text: rule.endDate.get)
-              end_date = rule.endDate.get
-            elsif(rule.startDate.get != end_date)
-              children[:SchedulePeriodEndDate] = SchedulePeriodEndDate.new(text: rule.endDate.get)
-              end_date = rule.endDate.get
-            else
-              #don't make anything new
-            end
-            
-          else
-            #TODO:  #put some error there is no end date
-          end
-          if not start_date.nil? and not end_date.nil?
-            days = os_schedule.to_ScheduleRuleset.get.getDaySchedules(start_date,end_date)
-            #puts days
-          end
-          #make ScheduleDetails
-          #puts rule
-          
-          # if(rule.applyMonday&&rule.applyTuesday&&rule.applyWednesday&&rule.applyThursday&&rule.applyFriday)
-          #   if(rule.applySunday&&rule.applySaturday)
-          #     dt = DayType.new(text:"All week")
-          #     daytypevector.push(dt)
-          #   else
-          #     dt = DayType.new(text:"Weekday")
-          #     daytypevector.push(dt)
-          #   end
-            
-          # elsif(rule.applySaturday && rule.applySunday)
-          #   dt = DayType.new(text:"Weekend")
-          #   daytypevector.push(dt)
-          # else
-          #   if(rule.applyMonday)
-          #     dt = DayType.new(text:"Monday")
-          #     daytypevector.push(dt)
-          #   elsif rule.applyTuesday
-          #     dt = DayType.new(text:"Tuesday")
-          #     daytypevector.push(dt)
-          #   elsif rule.applyWednesday
-          #     dt = DayType.new(text:"Wednesday")
-          #     daytypevector.push(dt)
-          #   elsif rule.applyThursday
-          #     dt = DayType.new(text:"Thursday")
-          #     daytypevector.push(dt)
-          #   elsif rule.applyFriday
-          #     dt = DayType.new(text:"Friday")
-          #     daytypevector.push(dt)
-          #   elsif rule.applySaturday
-          #     dt = DayType.new(text:"Saturday")
-          #     daytypevector.push(dt)
-          #   elsif rule.applySunday
-          #     dt = DayType.new(text:"Sunday")
-          #     daytypevector.push(dt)
-          #   else #TODO: Is there really no applyHoliday?
-          #     dt = DayType.new(text:"Holiday")
-          #     daytypevector.push(dt)
-          #   end
-              
-          # end
-          #rule.applyMonday good
-
-          #puts rule.daySchedule
-        end #end rules do
-        #not sure how to do ScheduleCateogory
-        
-      end
-
-      #rules = os_schedule.scheduleRules
-      #day_schedules = os_schedule
     end
-
   end
 
-  # def make_bs_schedules(os_schedules)
-  #   #make building sync schedules array
-  #   schedules_h = {}
-  #   schedules_h[:children] = {}
+end
 
-  #   os_schedules.each do |os_schedule|
-  #     #make a ScheduleType
-  #     h = {}
-  #     children = {}
-  #     attributes = {}
-  #     h[:children] = children
-  #     h[:attributes] = attributes
-  #     attributes[:ID] = { :value => os_schedule.handle.to_s }
-  #     puts os_schedule
+# To Create BuildingSync FanSystems
+# Created on October 15 2016 by Chien Si Harriman
+# chien.harriman@gmail.com
+# if an empty id_hash is passed in, it is generally assumed to use the plant handle as the LinkedSystemID
+class FanSystemsHelper
+  attr_accessor :fan_systems, :fan_count
+  def initialize(model, loop_id_hash)
+    begin
+      fan_systems_arr = []
+      bldg = model.getBuilding
+      tzones = bldg.thermalZones()
+      air_loops = []
 
-  #     if not os_schedule.to_ScheduleRuleset.empty?
-  #       rules = os_schedule.to_ScheduleRuleset.get.scheduleRules
-        
-  #       start_date = nil
-  #       end_date= nil
-  #       ruleset_name = nil
-  #       detailsvector = []
-  #       h_details = {}
-  #       h_details[:children] = {}
-  #       h_details[:attributes] = {}
+      #get air loops from the building
+      tzones.each do |tzone|
+        if not tzone.airLoopHVACTerminal.empty?
+          zoneTerm = tzone.airLoopHVACTerminal.get
+          #puts zoneTerm
+          if not zoneTerm.airLoopHVAC.empty?
+            air_loop = zoneTerm.airLoopHVAC.get
 
-  #       rules.each do |rule|
-  #         if not rule.startDate.empty?
-  #           if(start_date.nil?)
-  #             children[:SchedulePeriodBeginDate] = SchedulePeriodBeginDate.new(text: rule.startDate.get)
-  #             start_date = rule.startDate.get
-  #           elsif(rule.startDate.get != start_date)
-  #             detailsvector.push(ScheduleDetails.new({ children: h_details[:children] })) #set the details vector
-  #             children[:ScheduleDetails] = { value: detailsvector }
+            if air_loops.length == 0
+              air_loops.push(air_loop)
+            else
+              foundmatch = false
+              air_loops.each do |aloop|
+                if aloop.handle.to_s == air_loop.handle.to_s
+                  foundmatch = true
+                  break
+                end
+              end
+              if not foundmatch
+                air_loops.push(air_loop)
+              end
+            end
+          end
+        end
+      end
 
-  #             children[:SchedulePeriodBeginDate] = SchedulePeriodBeginDate.new(text: rule.startDate.get) #start over again
-  #             start_date = rule.startDate.get
-  #             detailsvector = Array.new
-  #           else
-  #             #don't make anything new
-  #           end
-  #         else
-  #           #RODO: #put some error there is no start date
-  #         end
-  #         if not rule.endDate.empty?
-  #           if(end_date.nil?)
-  #             children[:SchedulePeriodEndDate] = SchedulePeriodEndDate.new(text: rule.endDate.get)
-  #             end_date = rule.endDate.get
-  #           elsif(rule.startDate.get != end_date)
-  #             children[:SchedulePeriodEndDate] = SchedulePeriodEndDate.new(text: rule.endDate.get)
-  #             end_date = rule.endDate.get
-  #           else
-  #             #don't make anything new
-  #           end
-            
-  #         else
-  #           #TODO:  #put some error there is no end date
-  #         end
-  #         #make ScheduleDetails
-  #         #puts rule
+      #get pumps associated with each loop
+      @fan_count = 0
+      if loop_id_hash.keys.length == 0
+        air_loops.each do |airloop|
+          #puts airloop
+          loophandle = airloop.handle
+          loopname = airloop.name.get
+          supplyComponents = airloop.supplyComponents
+          #puts supplyComponents
+          variable_speed_fan_supply = airloop.supplyComponents(OpenStudio::Model::FanVariableVolume::iddObjectType())
+          constant_speed_fan_supply = airloop.supplyComponents(OpenStudio::Model::FanConstantVolume::iddObjectType())
+          unitary_system_supply = airloop.supplyComponents(OpenStudio::Model::AirLoopHVACUnitarySystem::iddObjectType())
+
+          if not variable_speed_fan_supply.empty?
+            puts "Found OS Variable speed supply fan", variable_speed_fan_supply.length
+            afan  = specify_fan_system(model,variable_speed_fan_supply, "Variable Volume", "Supply", loopname,loophandle)
+            fan_systems_arr.push(afan)
+          end
+          if not constant_speed_fan_supply.empty?
+            puts "Found OS Constant speed supply fan", constant_speed_fan_supply.length
+            afan  = specify_fan_system(model,constant_speed_fan_supply, "Constant Volume", "Supply", loopname,loophandle)
+            fan_systems_arr.push(afan)
+          end
+          if not unitary_system_supply.empty?
+            puts "Found OS Unitary system", unitary_system_supply.length
+            afan  = specify_fan_system(model,unitary_system_supply, "Unitary", "Supply", loopname,loophandle)
+            fan_systems_arr.push(afan)
+          end
+        end
+      else
+        #TODO, this path has not been programmed to allow customized plantType Ids other than the OpenStudio plant loop handle
+      end
+      h={}
+      children = {}
+      attributes = {}
+      h[:children] = children
+      h[:attributes] = attributes
+      children[:FanSystem]= {value: fan_systems_arr }
+      @fan_systems = FanSystems.new(h)
+      puts "Number of Fan Systems: ", fan_systems_arr.length
+    rescue => error
+      puts "Could not create the FanSystems Node properly"
+      puts error.inspect, error.backtrace
+      h={}
+      children = {}
+      attributes = {}
+      h[:children] = children
+      h[:attributes] = attributes
+      children[:FanSystem]= {value: fan_systems_arr }
+      @fan_systems = FanSystems.new(h)
+    ensure
+      
+    end
+  end
+
+  def specify_fan_system(model, fan_array, fan_type, application, loop_name, loop_handle)
+    fan_array.each do |fan|
+      fan = model.getObject(fan.handle)
+      #TODO, how do we make this more robust
+      if fan_type == "Unitary"
+
+        fan = fan.get.to_AirLoopHVACUnitarySystem.get
+        fan = fan.supplyFan
+        if not fan.empty?
+          fan = fan.get.to_FanOnOff.get
+        else
+          #TODO: raise an exception
+        end
+        #puts "Got unitary supply fan", fan
+        fan_type = "Constant Volume"
+        if fan.motorInAirstreamFraction.empty?
+          motorlocationrelair = fan.motorInAirstreamFraction.get > 0.5 ? true : false
+        end
+
+      elsif fan_type == "Constant Volume"
+
+        fan = fan.get.to_FanConstantVolume.get
+        puts "Got constant volume supply fan", fan
+        motorlocationrelair = fan.motorInAirstreamFraction > 0.5 ? true : false
+
+      elsif fan_type == "Variable Volume"
+        fan = fan.get.to_FanVariableVolume.get
+        puts "Got constant volume supply fan", fan
+        motorlocationrelair = fan.motorInAirstreamFraction > 0.5 ? true : false        
+      end
+      h={}
+      children = {}
+      attributes = {}
+      h[:children] = children
+      h[:attributes] = attributes
+      attributes[:ID] = { text: "Fan"+@pump_count.to_s }
+      children[:FanEfficiency] = {value: FanEfficiency.new({ text: fan.fanEfficiency }) }
+      children[:DesignStaticPressure] = {value: DesignStaticPressure.new({ text: fan.pressureRise }) }
+      children[:FanApplication] = { value: FanApplication.new({ text: application }) }
+      children[:FanControlType] = { value: FanControlType.new({ text: fan_type }) }
+      if not motorlocationrelair.nil?
+        children[:MotorLocationRelativeToAirStream] = { value: MotorLocationRelativeToAirStream.new({ text: motorlocationrelair }) }
+      end
+      #TODO: how to make FanPlacement element with information provided?
+      children[:Quantity] = { value: Quantity.new({ text: 1 }) }
+      lsh={}
+      lschildren = {}
+      lsattributes = {}
+      lsh[:children] = lschildren
+      lsh[:attributes] = lsattributes
+      lsattributes[:IDref] = { value: loop_handle.to_s }
+      children[:LinkedSystemID] = { value: LinkedSystemID.new(lsh) }
+      return FanSystemType.new(h)
+      @fan_count+=1
+    end
+  end
+end
+
+# To Create BuildingSync PumpSystems
+# Created on October 14 2016 by Chien Si Harriman
+# chien.harriman@gmail.com
+#if an empty id_hash is passed in, it is generally assumed to use the plant handle as the LinkedSystemID
+class PumpSystemsHelper
+  attr_accessor :pump_systems, :pump_count
+  def initialize(model,loop_id_hash)
+    begin
+      pump_systems_arr = []
+      plant_loops = model.getPlantLoops
+      #get pumps associated with each loop
+      @pump_count = 0
+      if loop_id_hash.keys.length == 0
+        plant_loops.each do |plantloop|
+          #puts plantloop
+          plant_handle = plantloop.handle
+          #TODO: this could be improved, but not sure how, as the loop type is best described by the loop name
+          plant_name = plantloop.name.get
           
-  #         if(rule.applyMonday&&rule.applyTuesday&&rule.applyWednesday&&rule.applyThursday&&rule.applyFriday)
-  #           if(rule.applySunday&&rule.applySaturday)
-  #             dt = DayType.new(text:"All week")
-  #             daytypevector.push(dt)
-  #           else
-  #             dt = DayType.new(text:"Weekday")
-  #             daytypevector.push(dt)
-  #           end
-            
-  #         elsif(rule.applySaturday && rule.applySunday)
-  #           dt = DayType.new(text:"Weekend")
-  #           daytypevector.push(dt)
-  #         else
-  #           if(rule.applyMonday)
-  #             dt = DayType.new(text:"Monday")
-  #             daytypevector.push(dt)
-  #           elsif rule.applyTuesday
-  #             dt = DayType.new(text:"Tuesday")
-  #             daytypevector.push(dt)
-  #           elsif rule.applyWednesday
-  #             dt = DayType.new(text:"Wednesday")
-  #             daytypevector.push(dt)
-  #           elsif rule.applyThursday
-  #             dt = DayType.new(text:"Thursday")
-  #             daytypevector.push(dt)
-  #           elsif rule.applyFriday
-  #             dt = DayType.new(text:"Friday")
-  #             daytypevector.push(dt)
-  #           elsif rule.applySaturday
-  #             dt = DayType.new(text:"Saturday")
-  #             daytypevector.push(dt)
-  #           elsif rule.applySunday
-  #             dt = DayType.new(text:"Sunday")
-  #             daytypevector.push(dt)
-  #           else #TODO: Is there really no applyHoliday?
-  #             dt = DayType.new(text:"Holiday")
-  #             daytypevector.push(dt)
-  #           end
-              
-  #         end
-  #         #rule.applyMonday good
 
-  #         #puts rule.daySchedule
-  #       end #end rules do
-  #       #not sure how to do ScheduleCateogory
-        
-  #     end
+          pump_variable_supply = plantloop.supplyComponents(OpenStudio::Model::PumpVariableSpeed::iddObjectType())
+          pump_constant_supply = plantloop.supplyComponents(OpenStudio::Model::PumpConstantSpeed::iddObjectType())
+          pump_variable_demand = plantloop.demandComponents(OpenStudio::Model::PumpVariableSpeed::iddObjectType())
+          pump_constant_demand = plantloop.demandComponents(OpenStudio::Model::PumpConstantSpeed::iddObjectType())
+          if not pump_variable_supply.empty?
+            apump = specify_pump_system_type(model, pump_variable_supply, "Variable Volume", plant_name, plant_handle)
+            pump_systems_arr.push(apump)
+          end
+          if not pump_constant_supply.empty?
+            #puts "Found constant speed pump on supply side", pump_constant_supply
+            apump = specify_pump_system_type(model, pump_constant_supply, "Constant Volume", plant_name, plant_handle)
+            pump_systems_arr.push(apump)
+          end
+          if not pump_variable_demand.empty?
+            #puts "Found variable speed pump on demand side", pump_variable_demand
+            apump = specify_pump_system_type(model, pump_variable_demand, "Variable Volume", plant_name, plant_handle)
+            pump_systems_arr.push(apump)
+          end
+          if not pump_constant_demand.empty?
+            #puts "Found constant volume pump on demand side", pump_constant_demand
+            apump = specify_pump_system_type(model, pump_constant_demAND, "Constant Volume", plant_name, plant_handle)
+            pump_systems_arr.push(apump)
+          end
+        end
+        #puts pump_systems_arr.length
+      else
+        #TODO, this path has not been programmed to allow customized plantType Ids other than the OpenStudio plant loop handle
+      end
+      h={}
+      children = {}
+      attributes = {}
+      h[:children] = children
+      h[:attributes] = attributes
+      children[:PumpSystem]= {value: pump_systems_arr }
+      @pump_systems = PumpSystems.new(h)
+    rescue => error
+      puts "Could not create the PumpSystems element properly"
+      puts error.inspect, error.backtrace
+    ensure
+      h={}
+      children = {}
+      attributes = {}
+      h[:children] = children
+      h[:attributes] = attributes
+      children[:PumpSystem]= {value: pump_systems_arr }
+      @pump_systems = PumpSystems.new(h)
+    end
+  end
 
-  #     #rules = os_schedule.scheduleRules
-  #     #day_schedules = os_schedule
-  #   end
-  # end
+  def specify_pump_system_type(model, pump_array, pump_type, plant_name, plant_handle)
+    pump_array.each do |pump|
+      pump = model.getObject(pump.handle)
+      #TODO, how do we make this more robust?
+      pump = pump_type == "Variable Volume" ? pump.get.to_PumpVariableSpeed.get : pump.get.to_PumpConstantSpeed.get
+      #puts "Got pump", pump
+      @pump_count+=1
+    
+      h={}
+      children = {}
+      attributes = {}
+      h[:children] = children
+      h[:attributes] = attributes
+      attributes[:ID] = { text: "Pump"+@pump_count.to_s }
+      children[:PumpEfficiency] = { value: PumpEfficiency.new({ text: pump.motorEfficiency.to_s }) }
+      children[:PumpControlType] = { value: PumpControlType.new({ text: pump_type }) }
+      children[:PumpOperation] = { value: PumpOperation.new({ text: "On Demand" })}
+
+      #TODO, this could be improved or expanded, but it is not clear how.  Other than name string, how to determine the pump configuration?
+      #Also could include "Tertiary", but this pumping scheme doesn't exist in the Reference Buildings used to develop this version
+      m = /Secondary/.match(pump.name.get)
+      if not m.nil?
+        children[:PumpingConfiguration] = { value: PumpingConfiguration.new({ text: "Secondary" }) }
+      else
+        children[:PumpingConfiguration] = { value: PumpingConfiguration.new({ text: "Primary" }) }
+      end
+      app = specify_pump_application(plant_name)
+      children[:PumpApplication] = { value: app }
+      children[:Quantity] = { value: Quantity.new({ text: 1 }) }
+
+      lsh={}
+      lschildren = {}
+      lsattributes = {}
+      lsh[:children] = lschildren
+      lsh[:attributes] = lsattributes
+      lsattributes[:IDref] = { value: plant_handle.to_s }
+      #puts "LinkedSystemID hash", lsh
+      linksysid = LinkedSystemID.new(lsh)
+      #puts linksysid
+      children[:LinkedSystemID] = { value: linksysid }
+
+      
+      #puts h
+      pump_system_type = PumpSystemType.new(h)
+      return pump_system_type
+    end
+  end
+
+  #TODO: this could be improved, but not clear how.  Name is stable in Reference Buildings, but long term this is not a great solution
+  #not sure of another approach yet for determining the application short of looking at the loop and components on it, which is a long-term solution
+  def specify_pump_application(plant_name)
+    cm = /Chilled/.match(plant_name)
+    bm = /Hot Water/.match(plant_name)
+    cnm = /Condenser/.match(plant_name)
+    dhwm = /Service Water/.match(plant_name)
+    hpm = /Heat Pump/.match(plant_name)
+    if not cm.nil?
+      return PumpApplication.new({ text: "Chilled Water" })
+    elsif not bm.nil?
+      return PumpApplication.new({ text: "Boiler" })
+    elsif not cnm.nil?
+      return PumpApplication.new({ text: "Condenser" })
+    elsif not dhwm.nil?
+      return PumpApplication.new({ text: "Domestic Hot Water" })
+    elsif not hpm.nil?
+      return PumpApplication.new({ text: "Recirculation" })
+    else
+      return PumpApplication.new({ text: "Unknown" })
+    end
+      
+  end
+end
+
+# To Create BuildingSync Schedules
+# Created on October 18 2016 by Chien Si Harriman
+# chien.harriman@gmail.com
+class SchedulesHelper
+  attr_accessor :schedules
+
+  def initialize(os_model) 
+    begin
+      os_schedules = os_model.getSchedules
+
+      schedule_type_array = [] #a container to hold all the instances of BuildingSync ScheduleType Objects created
+
+      os_schedules.each do |os_schedule|
+        #puts os_schedule
+        #hash for the ScheduleType object
+        h = {}
+        children = {}
+        attributes = {}
+        h[:children] = children
+        h[:attributes] = attributes
+        attributes[:ID] = { value: os_schedule.handle.to_s }
+        if not os_schedule.to_ScheduleRuleset.empty?
+          #make a ScheduleType
+
+          #variable initializations needed in the each loop
+          os_schedule = os_schedule.to_ScheduleRuleset.get
+          schedule_handle = os_schedule.handle
+          rules = os_schedule.scheduleRules
+          #puts "Found rules #{rules.length}"
+          default_schedule = os_schedule.defaultDaySchedule
+          start_date = nil
+          end_date= nil
+          ruleset_name = nil
+          details_array = []
+
+          rules.each do |rule|
+            #puts "#{rule}"
+            mindate = nil
+            maxdate = nil
+            if not rule.startDate.empty?
+              if(mindate.nil?)
+                children[:SchedulePeriodBeginDate] = { value: SchedulePeriodBeginDate.new({ text: rule.startDate.get }) }
+                start_date = rule.startDate.get
+                mindate = rule.startDate.get
+              #puts "Got Start date for rule #{rule.name}"
+              else
+                if rule.startDate.get < mindate
+                  children[:SchedulePeriodBeginDate] = { value: SchedulePeriodBeginDate.new({ text: rule.startDate.get }) }
+                  start_date = rule.startDate.get
+                  mindate = rule.startDate.get
+                end
+              end
+            else
+              raise "There was no start date for the OpenStudio ScheduleRuleset instance #{schedule_handle.to_s}"
+            end
+            if not rule.endDate.empty?
+              if maxdate.nil?
+                children[:SchedulePeriodEndDate] = { value: SchedulePeriodEndDate.new({ text: rule.endDate.get }) }
+                end_date = rule.endDate.get
+                maxdate = rule.endDate.get
+              else
+                if rule.endDate.get > maxdate
+                  children[:SchedulePeriodEndDate] = { value: SchedulePeriodEndDate.new({ text: rule.endDate.get }) }
+                  end_date = rule.endDate.get
+                  maxdate = rule.endDate.get
+                end
+              end
+              #puts "Got end date for rule #{rule.name}"
+            else
+              raise "There was no end date for the OpenStudio ScheduleRuleset instance #{schedule_handle.to_s}"
+            end
+            #TODO: not sure how to do ScheduleCateogory
+            #get details
+            return_array = specify_schedule_details_from_rule(rule)
+            details_array.push(return_array).flatten!
+            children[:ScheduleDetails] = { value: details_array }
+          end #end rules do
+          
+          
+          if rules.length == 0
+            #TODO: Verify with NREL whether this assumption on start date and end date is correct
+            children[:SchedulePeriodBeginDate] = { value: SchedulePeriodBeginDate.new({ text: "2006-01-01" }) } #TODO: can this be improved?
+            children[:SchedulePeriodEndDate] = { value: SchedulePeriodEndDate.new({ text: "2006-12-31" }) } # TODO: can this be improved?
+            return_array = make_default_day_schedule_details(default_schedule,"AllWeek")
+            details_array.push(return_array).flatten!
+            children[:ScheduleDetails] = { value: details_array }
+          else
+            #find days not covered, and apply default for each day
+            unique_days_covered = details_array.uniq { |p| p.children[:DayType][:value].text }
+            puts "Unique days covered", unique_days_covered.length
+            known_days = []
+            unique_days_covered.each do |unique|
+              if unique.children.has_key?(:DayType) #TODO: this occasionally happens, when this issue is resolved this if statement can be removed
+                known_days.push(unique.children[:DayType][:value].text)
+                puts unique.children[:DayType][:value].text
+              else
+                known_days.push("AllWeek")
+              end
+            end
+
+            days_not_covered = find_default_schedule_days(known_days)
+            #puts "Days not covered", days_not_covered
+            days_not_covered.each do |newday|
+              children[:SchedulePeriodBeginDate] = { value: SchedulePeriodBeginDate.new({ text: "2006-01-01" }) } #TODO: can this be improved?
+              children[:SchedulePeriodEndDate] = { value: SchedulePeriodEndDate.new({ text: "2006-12-31" }) } # TODO: can this be improved?
+              return_array = make_default_day_schedule_details(default_schedule,newday)
+              details_array.push(return_array).flatten!
+              children[:ScheduleDetails] = { value: details_array }
+            end
+          end
+
+        else
+          #this is not a Ruleset Schedule, meaning we have to investigate other schedule types
+          if not os_schedule.to_ScheduleConstant.empty?
+            puts "Encountered Schedule Constant"
+            os_schedule = os_schedule.to_ScheduleConstant.get
+            children[:SchedulePeriodBeginDate] = { value: SchedulePeriodBeginDate.new({ text: "2006-01-01" }) } #TODO: can this be improved?
+            children[:SchedulePeriodEndDate] = { value: SchedulePeriodEndDate.new({ text: "2006-12-31" }) } # TODO: can this be improved?
+            details_array = make_schedule_details_for_schedule_constant(os_schedule)
+            children[:ScheduleDetails] = { value: details_array }
+            puts h
+          else
+            throw "Unforeseen Schedule Type Encountered."
+          end
+        end #end if not ScheduleRuleSet.empty?
+
+        #finally! make the schedule Type
+        #TODO: consider refactoring this code base to consolidate and keep the various parts of the hash "h" closer together 
+        schedule_type = ScheduleType.new(h)
+        schedule_type_array.push(schedule_type)
+      end #end os_schedules do
+      h = {}
+      children = {}
+      h[:children] = children
+      children[:Schedule] = { value: schedule_type_array }
+      @schedules = Schedules.new(h)
+    rescue => error
+      puts "Could not create the Schedules element properly"
+      puts error.inspect, error.backtrace
+      h = {}
+      children = {}
+      h[:children] = children
+      children[:Schedule] = { value: schedule_type_array }
+      @schedules = Schedules.new(h)
+    ensure
+
+    end
+  end
+
+  def specify_schedule_details_from_rule(rule)
+    #puts "Making details array for"
+    #puts rule
+    h_details = {}
+    h_children = {}
+    h_attributes = {}
+    h_details[:children] = h_children
+    h_details[:attributes] = h_attributes
+
+    #puts "Day schedule times for rule ", rule.daySchedule.times
+    
+    if(rule.applyMonday&&rule.applyTuesday&&rule.applyWednesday&&rule.applyThursday&&rule.applyFriday)
+      if(rule.applySunday&&rule.applySaturday)
+        h_children[:DayType] = { value: DayType.new({ text:"AllWeek" }) } 
+      else
+        h_children[:DayType] = { value: DayType.new({ text:"Weekday" })}
+      end
+    elsif(rule.applySaturday && rule.applySunday)
+      h_children[:DayType] = { value: DayType.new({ text:"Weekend" })}
+    else
+      if(rule.applyMonday)
+        h_children[:DayType] = { value: DayType.new({ text:"Monday" })}
+      elsif rule.applyTuesday
+        h_children[:DayType] = { value: DayType.new({ text:"Tuesday" })}
+      elsif rule.applyWednesday
+        h_children[:DayType] = { value: DayType.new({ text:"Wednesday" })}
+      elsif rule.applyThursday
+        h_children[:DayType] = { value: DayType.new({ text:"Thursday" })}
+      elsif rule.applyFriday
+        h_children[:DayType] = { value: DayType.new({ text:"Friday" })}
+      elsif rule.applySaturday
+        h_children[:DayType] = { value: DayType.new({ text:"Saturday" })}
+      elsif rule.applySunday
+         h_children[:DayType] = { value: DayType.new({ text:"Sunday" })}
+      else #TODO: Is there really no applyHoliday?
+        #h_children[:DayType] = { value: DayType.new({ text:"Holiday" })}
+      end 
+    end
+
+    schedule_details_arr = make_schedule_details_from_day_schedule(rule.daySchedule, h_details)
+    return schedule_details_arr
+  end
+
+  #designed to receive DayTypes already covered by rules in a Ruleset, and returns an array of days NOT covered
+  #by rules
+  def find_default_schedule_days(known_days)
+    covered_days = []
+    available_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    weekday_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    weekend_days = ["Saturday", "Sunday"]
+
+    known_days.each do |known|
+      if known == "AllWeek"
+        return []
+      elsif known == "Weekday"
+        covered_days.push(weekday_days).flatten!
+      elsif known == "Weekend"
+        covered_days.push(weekend_days).flatten!
+      else
+        covered_days.push(known)
+      end
+    end
+
+    missing_days = covered_days + available_days - (covered_days & available_days)
+    return missing_days
+  end
+
+  def make_default_day_schedule_details(day_schedule, day_type)
+    schedule_details_arr = []
+    h = {}
+    children = {}
+    h[:children] = children
+    children[:DayType] = { value: DayType.new({ text: day_type }) }
+
+    schedule_details_arr = make_schedule_details_from_day_schedule(day_schedule,h)
+    return schedule_details_arr
+  end
+
+  def make_schedule_details_from_day_schedule(day_schedule, h_details)
+    schedule_details_arr = []
+    #puts rule.daySchedule
+    times = day_schedule.times
+    #puts times
+    if times.length > 1
+      timecount = 0
+      times.each_with_index do |t, index|
+        if timecount == 0
+          value = day_schedule.getValue(t)
+          #to account for the fact that OpenStudio times do not start at 00:00
+          h_details[:children][:DayStartTime] = { value: DayStartTime.new({ text: "00:00" })}
+          h_details[:children][:DayEndTime] = { value: DayEndTime.new({ text: t.to_s})}
+          if value <= 1
+            h_details[:children][:PartialOperationPercentage] = { value: PartialOperationPercentage.new({ text: value }) }
+          end
+          schedule_details = ScheduleDetails.new(h_details)
+          schedule_details_arr.push(schedule_details)
+          #now do the "normal routine"
+          h_details[:children][:DayStartTime] = { value: DayStartTime.new({ text: t.to_s })}
+          h_details[:children][:DayEndTime] = { value: DayEndTime.new({ text: times[index+1].to_s })}
+          if value <= 1
+            h_details[:children][:PartialOperationPercentage] = { value: PartialOperationPercentage.new({ text: value }) }
+          end
+        elsif timecount == times.length-1
+          break
+        else
+          value = day_schedule.getValue(t)
+          h_details[:children][:DayStartTime] = { value: DayStartTime.new({ text: t.to_s })}
+          h_details[:children][:DayEndTime] = { value: DayEndTime.new({ text: times[index+1].to_s })}
+          if value <= 1
+            h_details[:children][:PartialOperationPercentage] = { value: PartialOperationPercentage.new({ text: value }) }
+          end
+        end
+        #puts h_details
+        schedule_details = ScheduleDetails.new(h_details)
+        schedule_details_arr.push(schedule_details)
+        timecount+=1
+      end
+    else
+      value = day_schedule.getValue(times[0])
+      #to account for the fact that OpenStudio times do not start at 00:00
+      h_details[:children][:DayStartTime] = { value: DayStartTime.new({ text: "00:00" })}
+      h_details[:children][:DayEndTime] = { value: DayEndTime.new({ text: times[0].to_s})}
+      if value <= 1
+        h_details[:children][:PartialOperationPercentage] = { value: PartialOperationPercentage.new({ text: value }) }
+      end
+      schedule_details = ScheduleDetails.new(h_details)
+      schedule_details_arr.push(schedule_details)
+    end
+    return schedule_details_arr
+  end
+
+  #note the return is wrapped as an array
+  def make_schedule_details_for_schedule_constant(schedule_constant)
+    h = {}
+    children = {}
+    h[:children] = children
+    children[:DayType] = { value: DayType.new({ text: "AllWeek" }) }
+    children[:DayStartTime] = { value: DayStartTime.new({ text: "00:00" }) }
+    children[:DayEndTime] = { value: DayEndTime.new({ text: "24:00" }) }
+    children[:PartialOperationPercentage] = { value: PartialOperationPercentage.new({ text: schedule_constant.value })}
+    schedule_details = ScheduleDetails.new(h)
+    return [schedule_details]
+  end
 end
 
 class SidesHelper
@@ -2995,7 +3426,7 @@ class WriteXML
     child_att_keys_s =  child_att_keys
     child_att_keys_s.map { |x| x.to_s }
     #get keys
-    #puts "#{h.keys}"
+    #puts "#{h}"
     h.keys.each do |master_key|
       current_key = master_key
       #puts "Current key #{current_key}"
@@ -3091,7 +3522,7 @@ class WriteXML
                   #puts good_hash
                   self.mostRecentElement.add_attributes(good_hash)
                 end
-                
+                self.hasType = false #this is important and is required for nested structures to properly serialize from nested hashes
               else
                 if (current_key.to_s == "HVACSystemType")
                   #puts "Array Item May or May not be a type."

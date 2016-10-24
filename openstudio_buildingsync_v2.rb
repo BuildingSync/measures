@@ -80,8 +80,12 @@ class SimpleElement
     begin
       args.keys.each do |k|
        #puts "Working on " + k.to_s
-       #puts @children
-       #puts args
+       if k.to_s == "Schedules"
+        #puts "Working on " + k.to_s
+        #puts "Children", @children
+        #puts "Full Arguments", args
+      end
+       
         if(args[k][:value].is_a?(Array))
           #puts "Value is an array"
           args[k][:value].each do |c|
@@ -134,12 +138,13 @@ class SimpleElement
               end
             end
           else
-            #TODO return some error saying the key could not be found
+            raise "Could not find the child element: #{k} in all children #{@children.keys}"
           end
         end
       end #end of keys outer loop
-    rescue
-      throw "Problem bulking children"
+    rescue => error
+      puts error.inspect, error.backtrace
+      puts "Problem bulking children"
     ensure
 
     end
@@ -165,7 +170,7 @@ end
 class IDOnlyElement < SimpleElement
   def specify_attributes
     @attributes = {}
-    @attributes[:IDref] = { required:true, text: nil }
+    @attributes[:IDref] = { required:true, value: nil }
   end
 end
 
@@ -299,7 +304,7 @@ class Audit < SimpleElement
     @children = {}
     @children[:Sites] = { required:false, value: nil }
     @children[:Systems] = { required:false, value: nil }
-    @children[:Schedules] = { required:false, type: 'ScheduleType', value: [] } #TODO: are the following really arrays?  Documentation is ambig.
+    @children[:Schedules] = { required:false, value: [] } #TODO: are the following really arrays?  Documentation is ambig.
     @children[:Measures] = { required:false, type: 'MeasureType', value: [] }
     @children[:Report] = { required:false, value: nil }
     @children[:Contacts] = { required:false, type: 'ContactType', value: [] }
@@ -568,6 +573,9 @@ end
 class DaylightingIlluminanceSetpoint < SimpleElement; end
 class DaylitFloorArea < SimpleElement; end
 
+class DayStartTime < SimpleElement; end
+class DayEndTime < SimpleElement; end
+
 class DayType < EnumeratedElement
   def specify_enums
     @enums = ["AllWeek",
@@ -626,6 +634,7 @@ end
 
 class DeliveryID < IDOnlyElement; end
 
+class DesignStaticPressure < SimpleElement; end
 class DuctSystems < SimpleElement
   def specify_children
     @children = {}
@@ -785,7 +794,7 @@ class FanEfficiency < SimpleElement; end
 
 class FanPlacement < EnumeratedElement 
   def specify_enums
-    @enums = ["Series"
+    @enums = ["Series",
               "Parallel",
               "Draw Through",
               "Blow Through",
@@ -794,13 +803,16 @@ class FanPlacement < EnumeratedElement
   end
 end
 
+class FanPowerMinimumRatio < SimpleElement; end
 
 class FanSystemType < SimpleElement
   def specify_children
     @children = {}
     @children[:FanEfficiency] = { required: false, value: nil }
+    @children[:DesignStaticPressure] = { required: false, value: nil }
     @children[:FanApplication] = { required: false, value: nil }
     @children[:FanControlType] = { required: false, value: nil }
+    @children[:FanPowerMinimumRatio] = { required: false, value: nil }
     @children[:MotorLocationRelativeToAirStream] = { required: false, value: nil }
     @children[:FanPlacement] = { required: false, value: nil }
     @children[:Quantity] = { required: false, value: nil }
@@ -1173,7 +1185,7 @@ end
 class LinkedSpaceID < SimpleElement
   def specify_children
     @children = {}
-    @children[:LinkedScheduleID] = { required: false, value: [] }
+    @children[:LinkedScheduleID] = { required: false, value: [] } #TODO: Investigate
   end
   def specify_attributes
     @attributes = {}
@@ -1183,7 +1195,7 @@ end
 
 class LinkedScheduleID < IDOnlyElement; end
 
-class LinkedSystemID <  IDOnlyElement; end
+class LinkedSystemID < IDOnlyElement; end
 
 class LinkedThermalZoneID < IDOnlyElement; end
 
@@ -1434,15 +1446,11 @@ class OccupantsActivityLevel < EnumeratedElement
 end
 
 class OtherCombination < SimpleElement; end
-
 class OutputCapacity < SimpleElement; end
-
+class PartialOperationPercentage < SimpleElement; end
 class PercentageOfCommonSpace < SimpleElement; end
-
 class PercentOfWindowAreaShaded < SimpleElement; end
-
 class PerimeterZoneDepth < SimpleElement; end
-
 class PremisesName < SimpleElement; end
 class PremisesNotes < SimpleElement; end
 class PremisesIdentifiers < SimpleElement; end
@@ -1493,7 +1501,7 @@ end
 
 class PumpApplication < EnumeratedElement
   def specify_enums
-    @enums  ["Boiler",
+    @enums = ["Boiler",
             "Chilled Water",
             "Domestic Hot Water",
             "Solar Hot Water",
@@ -1512,7 +1520,7 @@ class PumpApplication < EnumeratedElement
   end
 end
 
-class PumpConfiguration < EnumeratedElement
+class PumpingConfiguration < EnumeratedElement
   def specify_enums
     @enums = ["Primary",
               "Secondary",
@@ -1549,20 +1557,20 @@ class PumpEfficiency < SimpleElement; end
 
 class PumpSystemType < SimpleElement
   def specify_children
-    children = {}
-    children[:PumpEfficiency] = { required:false, value: nil }
-    children[:PumpControlType] = { required:false, value: nil }
-    children[:PumpOperation] = { required:false, value: nil }
-    children[:PumpingConfiguration] = { required:false, value: nil }
-    children[:PumpApplication] = { required:false, value: nil }
-    children[:Quantity] = { required:false, value: nil }
-    children[:LinkedSystemID] = { required:false, value: nil }
+    @children = {}
+    @children[:PumpEfficiency] = { required:false, value: nil }
+    @children[:PumpControlType] = { required:false, value: nil }
+    @children[:PumpOperation] = { required:false, value: nil }
+    @children[:PumpingConfiguration] = { required:false, value: nil }
+    @children[:PumpApplication] = { required:false, value: nil }
+    @children[:Quantity] = { required:false, value: nil }
+    @children[:LinkedSystemID] = { required:false, value: nil }
     #TODO: Add more as required
   end
 
   def specify_attributes
-    attributes = {}
-    attributes[:ID] ={ required:false, text: nil }
+    @attributes = {}
+    @attributes[:ID] ={ required:false, value: nil }
   end
 end
 
@@ -1608,7 +1616,7 @@ class RoofInsulatedArea < SimpleElement; end
 class RoofSystems < SimpleElement
   def specify_children
     @children = {}
-    @children[:RoofSystem] = { required:true, type:  "RoofSystemType",value:  [] }
+    @children[:RoofSystem] = { required:true, type: "RoofSystemType", value:  [] }
   end
 end
 
@@ -1637,6 +1645,28 @@ class RoofSystemType < SimpleElement
   def specify_attributes
     @attributes = {}
     @attributes[:ID] = { required:false, text: nil }
+  end
+end
+
+class ScheduleCategory < EnumeratedElement
+  def specify_enums
+    @enums = ["Business",
+              "Occupied",
+              "Unoccupied",
+              "Sleeping",
+              "Public access",
+              "Setback",
+              "Operating",
+              "HVAC equipment",
+              "Cooling equipment",
+              "Heating equipment",
+              "Lighting",
+              "Cooking equipment",
+              "Miscellaneous equipment",
+              "On-peak",
+              "Off-peak",
+              "Super off-peak",
+              "Other"]
   end
 end
 
@@ -1674,7 +1704,7 @@ class SchedulePeriodEndDate < SimpleElement; end
 class Schedules < SimpleElement
   def specify_children
     @children = {}
-    @childrens[:Schedule] = { required:false, type: "ScheduleType", value: [] }
+    @children[:Schedule] = { required:false, type: "ScheduleType", value: [] }
   end
 end
 
@@ -1881,15 +1911,18 @@ class Systems < SimpleElement
     @children = {}
     @children[:HVACSystems] = { required:false, value: nil }
     @children[:LightingSystems] = { required:false, value: nil }
-    @children[:DomesticHotWaterSystems] = { required:false, value: nil }
-    @children[:CookingSystems] = { required:false, value: nil }
-    #TODO: add all systems, currently only systems added for OpenStudio conversion
+    
     @children[:WallSystems] = { required:false, value: nil }
     @children[:RoofSystems] = { required:false, value: nil }
     @children[:CeilingSystems] = { required:false, value: nil }
     @children[:FenestrationSystems] = { required:false, value: nil }
     @children[:FoundationSystems] = { required:false, value: nil }
     @children[:PlugLoads] = { required:false, value: nil }
+    @children[:PumpSystems] = { required: false, value: nil }
+    @children[:FanSystems] = { required: false, value: nil }
+    #TODO: add more systems as needed
+    #@children[:DomesticHotWaterSystems] = { required:false, value: nil }
+    #@children[:CookingSystems] = { required:false, value: nil }
   end
 end
 
@@ -1976,7 +2009,7 @@ class WallArea < SimpleElement; end
 class WallSystems < SimpleElement
   def specify_children
     @children = {}
-    @children[:WallSystem] = { required: false, type: "WallSystemType",value:  [] }
+    @children[:WallSystem] = { required: false, type: "WallSystemType", value:  [] }
   end
 end
 
