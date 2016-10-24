@@ -697,6 +697,8 @@ class EconomizerDryBulbControlPoint < SimpleElement; end
 class EconomizerEnthalpyControlPoint < SimpleElement; end
 class EconomizerLowTemperatureLockout < SimpleElement; end
 
+class EnergyRecoveryEfficiency < SimpleElement; end
+
 class Facilities < SimpleElement
   #initialize the Facility Children with a simple type or array
   def specify_children
@@ -1121,6 +1123,46 @@ class HeatingPlantType < SimpleElement
   def specify_attributes
     @attributes = {}
     @attributes[:ID] = { required: false, text: nil}
+  end
+end
+
+class HeatRecoverySystems < SimpleElement 
+  def specify_children
+    @children = {}
+    @children[:HeatRecoverySystem] = { required: false, type:"HeatRecoverySystemType", value: []}
+  end
+end
+
+class HeatRecoverySystemType < SimpleElement
+  def specify_children
+    @children = {}
+    @children[:HeatRecoveryEfficiency] = { required: false, value: nil }
+    @children[:EnergyRecoveryEfficiency] = { required: false, value: nil }
+    @children[:HeatRecoveryType] = { required: false, value: nil }
+    @children[:SystemIDReceivingHeat] = { required: false, value: nil }
+    @children[:SystemIDProvidingHeat] = { required: false, value: nil }
+  end
+
+  def specify_attributes
+    @attributes = {}
+    @attributes[:ID] = { require: false, value: nil}
+  end
+end
+
+class HeatRecoveryEfficiency < SimpleElement; end
+
+class HeatRecoveryType < EnumeratedElement
+  def specify_enums
+    @enums = ["Run around coil",
+              "Thermal wheel",
+              "Heat pipe",
+              "Water to air heat exchanger",
+              "Water to water heat exchanger",
+              "Air to air heat exchanger",
+              "Earth to air heat exchanger",
+              "Earth to water heat exchanger",
+              "Other",
+              "Unknown"]
   end
 end
 
@@ -1922,11 +1964,15 @@ class Systems < SimpleElement
     @children[:PlugLoads] = { required:false, value: nil }
     @children[:PumpSystems] = { required: false, value: nil }
     @children[:FanSystems] = { required: false, value: nil }
+    @children[:HeatRecoverySystems] = { required: false, value: nil }
     #TODO: add more systems as needed
     #@children[:DomesticHotWaterSystems] = { required:false, value: nil }
     #@children[:CookingSystems] = { required:false, value: nil }
   end
 end
+
+class SystemIDReceivingHeat < IDOnlyElement; end
+class SystemIDProvidingHeat < IDOnlyElement; end
 
 class TerminalUnit < EnumeratedElement
   def specify_enums

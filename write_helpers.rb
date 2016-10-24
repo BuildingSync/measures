@@ -68,6 +68,9 @@ class AuditHelper
       fans = FanSystemsHelper.new(os_model,{})
       children[:FanSystems] = { value: fans.fan_systems }
 
+      hrs = HeatRecoverySystemsHelper.new(os_model)
+      children[:HeatRecoverySystems] = { value: hrs.heat_recovery_systems }
+
       #puts "Making Systems Instance"
       sys = Systems.new(h);
       #make schedules
@@ -582,10 +585,264 @@ class DuctSystemsHelper
       #puts @ductsystems
     end
   end
-
-
 end
 
+# To Create BuildingSync FanSystems
+# Created on October 15 2016 by Chien Si Harriman
+# chien.harriman@gmail.com
+# if an empty id_hash is passed in, it is generally assumed to use the plant handle as the LinkedSystemID
+class FanSystemsHelper
+  attr_accessor :fan_systems, :fan_count
+  def initialize(model, loop_id_hash)
+    begin
+      fan_systems_arr = []
+      bldg = model.getBuilding
+      tzones = bldg.thermalZones()
+      air_loops = []
+
+      #get air loops from the building
+      tzones.each do |tzone|
+        if not tzone.airLoopHVACTerminal.empty?
+          zoneTerm = tzone.airLoopHVACTerminal.get
+          #puts zoneTerm
+          if not zoneTerm.airLoopHVAC.empty?
+            air_loop = zoneTerm.airLoopHVAC.get
+
+            if air_loops.length == 0
+              air_loops.push(air_loop)
+            else
+              foundmatch = false
+              air_loops.each do |aloop|
+                if aloop.handle.to_s == air_loop.handle.to_s
+                  foundmatch = true
+                  break
+                end
+              end
+              if not foundmatch
+                air_loops.push(air_loop)
+              end
+            end
+          end
+        end
+      end
+
+      #get pumps associated with each loop
+      @fan_count = 0
+      if loop_id_hash.keys.length == 0
+        air_loops.each do |airloop|
+          #puts airloop
+          loophandle = airloop.handle
+          loopname = airloop.name.get
+          supplyComponents = airloop.supplyComponents
+          #puts supplyComponents
+          variable_speed_fan_supply = airloop.supplyComponents(OpenStudio::Model::FanVariableVolume::iddObjectType())
+          constant_speed_fan_supply = airloop.supplyComponents(OpenStudio::Model::FanConstantVolume::iddObjectType())
+          unitary_system_supply = airloop.supplyComponents(OpenStudio::Model::AirLoopHVACUnitarySystem::iddObjectType())
+
+          if not variable_speed_fan_supply.empty?
+            puts "Found OS Variable speed supply fan", variable_speed_fan_supply.length
+            afan  = specify_fan_system(model,variable_speed_fan_supply, "Variable Volume", "Supply", loopname,loophandle)
+            fan_systems_arr.push(afan)
+          end
+          if not constant_speed_fan_supply.empty?
+            puts "Found OS Constant speed supply fan", constant_speed_fan_supply.length
+            afan  = specify_fan_system(model,constant_speed_fan_supply, "Constant Volume", "Supply", loopname,loophandle)
+            fan_systems_arr.push(afan)
+          end
+          if not unitary_system_supply.empty?
+            puts "Found OS Unitary system", unitary_system_supply.length
+            afan  = specify_fan_system(model,unitary_system_supply, "Unitary", "Supply", loopname,loophandle)
+            fan_systems_arr.push(afan)
+          end
+        end
+      else
+        #TODO, this path has not been programmed to allow customized plantType Ids other than the OpenStudio plant loop handle
+      end
+      h={}
+      children = {}
+      attributes = {}
+      h[:children] = children
+      h[:attributes] = attributes
+      children[:FanSystem]= {value: fan_systems_arr }
+      @fan_systems = FanSystems.new(h)
+      puts "Number of Fan Systems: ", fan_systems_arr.length
+    rescue => error
+      puts "Could not create the FanSystems Node properly"
+      puts error.inspect, error.backtrace
+      h={}
+      children = {}
+      attributes = {}
+      h[:children] = children
+      h[:attributes] = attributes
+      children[:FanSystem]= {value: fan_systems_arr }
+      @fan_systems = FanSystems.new(h)
+    ensure
+      
+    end
+  end
+
+  def specify_fan_system(model, fan_array, fan_type, application, loop_name, loop_handle)
+    fan_array.each do |fan|
+      fan = model.getObject(fan.handle)
+      #TODO, how do we make this more robust
+      if fan_type == "Unitary"
+
+        fan = fan.get.to_AirLoopHVACUnitarySystem.get
+        fan = fan.supplyFan
+        if not fan.empty?
+          fan = fan.get.to_FanOnOff.get
+        else
+          #TODO: raise an exception
+        end
+        #puts "Got unitary supply fan", fan
+        fan_type = "Constant Volume"
+        if fan.motorInAirstreamFraction.empty?
+          motorlocationrelair = fan.motorInAirstreamFraction.get > 0.5 ? true : false
+        end
+
+      elsif fan_type == "Constant Volume"
+
+        fan = fan.get.to_FanConstantVolume.get
+        #puts "Got constant volume supply fan", fan
+        motorlocationrelair = fan.motorInAirstreamFraction > 0.5 ? true : false
+
+      elsif fan_type == "Variable Volume"
+        fan = fan.get.to_FanVariableVolume.get
+        #puts "Got constant volume supply fan", fan
+        motorlocationrelair = fan.motorInAirstreamFraction > 0.5 ? true : false        
+      end
+      h={}
+      children = {}
+      attributes = {}
+      h[:children] = children
+      h[:attributes] = attributes
+      attributes[:ID] = { text: "Fan"+@pump_count.to_s }
+      children[:FanEfficiency] = {value: FanEfficiency.new({ text: fan.fanEfficiency }) }
+      children[:DesignStaticPressure] = {value: DesignStaticPressure.new({ text: fan.pressureRise }) }
+      children[:FanApplication] = { value: FanApplication.new({ text: application }) }
+      children[:FanControlType] = { value: FanControlType.new({ text: fan_type }) }
+      if not motorlocationrelair.nil?
+        children[:MotorLocationRelativeToAirStream] = { value: MotorLocationRelativeToAirStream.new({ text: motorlocationrelair }) }
+      end
+      #TODO: how to make FanPlacement element with information provided?
+      children[:Quantity] = { value: Quantity.new({ text: 1 }) }
+      lsh={}
+      lschildren = {}
+      lsattributes = {}
+      lsh[:children] = lschildren
+      lsh[:attributes] = lsattributes
+      lsattributes[:IDref] = { value: loop_handle.to_s }
+      children[:LinkedSystemID] = { value: LinkedSystemID.new(lsh) }
+      return FanSystemType.new(h)
+      @fan_count+=1
+    end
+  end
+end
+
+# To Create BuildingSync HeatRecovery systems
+# Created on October 21 2016 by Chien Si Harriman
+# chien.harriman@gmail.com
+# currently can only search for airside heat recovery system on air handlers
+class HeatRecoverySystemsHelper
+  attr_accessor :heat_recovery_systems, :system_count
+  def initialize(model)
+    hr_array = []
+    begin
+      @system_count = 0 
+
+      air_loops = []
+
+      #get air loops from the building
+      bldg = model.getBuilding
+      tzones = bldg.thermalZones()
+      tzones.each do |tzone|
+        if not tzone.airLoopHVACTerminal.empty?
+          zoneTerm = tzone.airLoopHVACTerminal.get
+          #puts zoneTerm
+          if not zoneTerm.airLoopHVAC.empty?
+            air_loop = zoneTerm.airLoopHVAC.get
+
+            if air_loops.length == 0
+              air_loops.push(air_loop)
+            else
+              foundmatch = false
+              air_loops.each do |aloop|
+                if aloop.handle.to_s == air_loop.handle.to_s
+                  foundmatch = true
+                  break
+                end
+              end
+              if not foundmatch
+                air_loops.push(air_loop)
+              end
+            end
+          end
+        end
+      end
+      bldg = model.getBuilding
+      tzones = bldg.thermalZones()
+      air_loops.each do |airLoop|
+        #puts airLoop.supplyComponents
+        oas = nil
+        if not airLoop.airLoopHVACOutdoorAirSystem.empty?
+          oas = airLoop.airLoopHVACOutdoorAirSystem.get
+          comps = oas.oaComponents
+          if comps.length >= 2
+          #puts comps[1]
+            if comps[1].to_HeatExchangerAirToAirSensibleAndLatent.is_initialized
+              hx = comps[1].to_HeatExchangerAirToAirSensibleAndLatent.get #TODO: this is still flaky
+              puts hx
+              h = {}
+              children = {}
+              attributes = {}
+              h[:children] = children
+              h[:attributes] = attributes
+              children[:HeatRecoveryEfficiency] = { value: HeatRecoveryEfficiency.new({ text: hx.sensibleEffectivenessat100HeatingAirFlow.to_s })}
+              totaleff = hx.sensibleEffectivenessat100HeatingAirFlow+ hx.latentEffectivenessat100CoolingAirFlow
+              children[:EnergyRecoveryEfficiency] = { value: EnergyRecoveryEfficiency.new({ text: totaleff.to_s }) }
+
+              sh = {}
+              sattributes = {}
+              sh[:attributes] = sattributes
+              sattributes[:IDref] = { value: airLoop.handle.to_s }
+              children[:SystemIDReceivingHeat] = { value: SystemIDReceivingHeat.new(sh)}
+              children[:HeatRecoveryType] = { value: HeatRecoveryType.new({ text: "Thermal wheel" }) }
+              attributes[:ID] = { value: "HeatRecoverySystem"+ @system_count.to_s }
+              hrst = HeatRecoverySystemType.new(h)
+              hr_array.push(hrst)
+              @system_count+=1
+            end
+          end
+        else
+          raise "Unanticipated Heat Recovery System Type not previously encountered."
+        end
+      end
+      h = {}
+      children = {}
+      attributes = {}
+      h[:children] = children
+      h[:attributes] = attributes
+      children[:HeatRecoverySystem] = { value: hr_array }
+      @heat_recovery_systems = HeatRecoverySystems.new(h)
+    rescue => error
+      puts "Could not create the DuctSystems node properly"
+      puts error.inspect, error.backtrace
+      h = {}
+      children = {}
+      attributes = {}
+      h[:children] = children
+      h[:attributes] = attributes
+      children[:HeatRecoverySystem] = { value: hr_array }
+      @heat_recovery_systems = HeatRecoverySystems.new(h)
+    ensure
+
+    end
+  end
+end
+
+# To Create BuildingSync HVAC SYstems
+# Created on September 18 2016 by Chien Si Harriman
+# chien.harriman@gmail.com
 class HVACSystemsHelper
   attr_accessor :hvac_systems, :unique_hvac_systems, :air_loops, :plant_loops, :fan_systems, :pump_systems
   def initialize(model)
@@ -1792,157 +2049,6 @@ class PlugLoadsHelper
 
 end
 
-# To Create BuildingSync FanSystems
-# Created on October 15 2016 by Chien Si Harriman
-# chien.harriman@gmail.com
-# if an empty id_hash is passed in, it is generally assumed to use the plant handle as the LinkedSystemID
-class FanSystemsHelper
-  attr_accessor :fan_systems, :fan_count
-  def initialize(model, loop_id_hash)
-    begin
-      fan_systems_arr = []
-      bldg = model.getBuilding
-      tzones = bldg.thermalZones()
-      air_loops = []
-
-      #get air loops from the building
-      tzones.each do |tzone|
-        if not tzone.airLoopHVACTerminal.empty?
-          zoneTerm = tzone.airLoopHVACTerminal.get
-          #puts zoneTerm
-          if not zoneTerm.airLoopHVAC.empty?
-            air_loop = zoneTerm.airLoopHVAC.get
-
-            if air_loops.length == 0
-              air_loops.push(air_loop)
-            else
-              foundmatch = false
-              air_loops.each do |aloop|
-                if aloop.handle.to_s == air_loop.handle.to_s
-                  foundmatch = true
-                  break
-                end
-              end
-              if not foundmatch
-                air_loops.push(air_loop)
-              end
-            end
-          end
-        end
-      end
-
-      #get pumps associated with each loop
-      @fan_count = 0
-      if loop_id_hash.keys.length == 0
-        air_loops.each do |airloop|
-          #puts airloop
-          loophandle = airloop.handle
-          loopname = airloop.name.get
-          supplyComponents = airloop.supplyComponents
-          #puts supplyComponents
-          variable_speed_fan_supply = airloop.supplyComponents(OpenStudio::Model::FanVariableVolume::iddObjectType())
-          constant_speed_fan_supply = airloop.supplyComponents(OpenStudio::Model::FanConstantVolume::iddObjectType())
-          unitary_system_supply = airloop.supplyComponents(OpenStudio::Model::AirLoopHVACUnitarySystem::iddObjectType())
-
-          if not variable_speed_fan_supply.empty?
-            puts "Found OS Variable speed supply fan", variable_speed_fan_supply.length
-            afan  = specify_fan_system(model,variable_speed_fan_supply, "Variable Volume", "Supply", loopname,loophandle)
-            fan_systems_arr.push(afan)
-          end
-          if not constant_speed_fan_supply.empty?
-            puts "Found OS Constant speed supply fan", constant_speed_fan_supply.length
-            afan  = specify_fan_system(model,constant_speed_fan_supply, "Constant Volume", "Supply", loopname,loophandle)
-            fan_systems_arr.push(afan)
-          end
-          if not unitary_system_supply.empty?
-            puts "Found OS Unitary system", unitary_system_supply.length
-            afan  = specify_fan_system(model,unitary_system_supply, "Unitary", "Supply", loopname,loophandle)
-            fan_systems_arr.push(afan)
-          end
-        end
-      else
-        #TODO, this path has not been programmed to allow customized plantType Ids other than the OpenStudio plant loop handle
-      end
-      h={}
-      children = {}
-      attributes = {}
-      h[:children] = children
-      h[:attributes] = attributes
-      children[:FanSystem]= {value: fan_systems_arr }
-      @fan_systems = FanSystems.new(h)
-      puts "Number of Fan Systems: ", fan_systems_arr.length
-    rescue => error
-      puts "Could not create the FanSystems Node properly"
-      puts error.inspect, error.backtrace
-      h={}
-      children = {}
-      attributes = {}
-      h[:children] = children
-      h[:attributes] = attributes
-      children[:FanSystem]= {value: fan_systems_arr }
-      @fan_systems = FanSystems.new(h)
-    ensure
-      
-    end
-  end
-
-  def specify_fan_system(model, fan_array, fan_type, application, loop_name, loop_handle)
-    fan_array.each do |fan|
-      fan = model.getObject(fan.handle)
-      #TODO, how do we make this more robust
-      if fan_type == "Unitary"
-
-        fan = fan.get.to_AirLoopHVACUnitarySystem.get
-        fan = fan.supplyFan
-        if not fan.empty?
-          fan = fan.get.to_FanOnOff.get
-        else
-          #TODO: raise an exception
-        end
-        #puts "Got unitary supply fan", fan
-        fan_type = "Constant Volume"
-        if fan.motorInAirstreamFraction.empty?
-          motorlocationrelair = fan.motorInAirstreamFraction.get > 0.5 ? true : false
-        end
-
-      elsif fan_type == "Constant Volume"
-
-        fan = fan.get.to_FanConstantVolume.get
-        puts "Got constant volume supply fan", fan
-        motorlocationrelair = fan.motorInAirstreamFraction > 0.5 ? true : false
-
-      elsif fan_type == "Variable Volume"
-        fan = fan.get.to_FanVariableVolume.get
-        puts "Got constant volume supply fan", fan
-        motorlocationrelair = fan.motorInAirstreamFraction > 0.5 ? true : false        
-      end
-      h={}
-      children = {}
-      attributes = {}
-      h[:children] = children
-      h[:attributes] = attributes
-      attributes[:ID] = { text: "Fan"+@pump_count.to_s }
-      children[:FanEfficiency] = {value: FanEfficiency.new({ text: fan.fanEfficiency }) }
-      children[:DesignStaticPressure] = {value: DesignStaticPressure.new({ text: fan.pressureRise }) }
-      children[:FanApplication] = { value: FanApplication.new({ text: application }) }
-      children[:FanControlType] = { value: FanControlType.new({ text: fan_type }) }
-      if not motorlocationrelair.nil?
-        children[:MotorLocationRelativeToAirStream] = { value: MotorLocationRelativeToAirStream.new({ text: motorlocationrelair }) }
-      end
-      #TODO: how to make FanPlacement element with information provided?
-      children[:Quantity] = { value: Quantity.new({ text: 1 }) }
-      lsh={}
-      lschildren = {}
-      lsattributes = {}
-      lsh[:children] = lschildren
-      lsh[:attributes] = lsattributes
-      lsattributes[:IDref] = { value: loop_handle.to_s }
-      children[:LinkedSystemID] = { value: LinkedSystemID.new(lsh) }
-      return FanSystemType.new(h)
-      @fan_count+=1
-    end
-  end
-end
 
 # To Create BuildingSync PumpSystems
 # Created on October 14 2016 by Chien Si Harriman
