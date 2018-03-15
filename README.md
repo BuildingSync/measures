@@ -1,2 +1,2 @@
 # measures
-OpenStudio measures specific to BuildingSync
+OpenStudio measures specific to BuildingSync®
